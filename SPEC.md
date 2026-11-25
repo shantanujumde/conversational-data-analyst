@@ -10,17 +10,20 @@ This spec covers only what the exercise asks for. Anything not listed under "In 
 
 ## 1. Decisions
 
-| Area | Choice | Why |
-|---|---|---|
-| Frontend | React 19 + Vite + TypeScript | Fast dev server, zero config TS. |
-| Backend | Node.js + Express + TypeScript (run with `tsx`) | Small, well known, easy to test with `supertest`. |
-| Database | SQLite via `better-sqlite3` | One file, no install, created by a seed script. Query path opens it **read-only**. |
-| Charts | Recharts | Built for React (charts are components), bar + line out of the box, renders SVG (needed for "copy chart as image"). |
-| AI layer | Vercel AI SDK v7 (`ai`) + `@ai-sdk/google`, model `gemini-4-hydrogen`, plus a built-in `mock` provider | Switch model with one env var (`AI_MODEL`); other providers need only a new `@ai-sdk/*` package. Mock keeps tests running with no API key or network. |
-| How AI talks to the DB | AI returns a **query plan** (JSON), never SQL. Server validates the plan against an allow-list and builds parameterised SQL itself. | Meets "no unrestricted AI SQL". Prompt injection can at worst produce a plan that fails validation. |
-| Validation | Zod everywhere: env, request body, AI output, API response types | One schema gives both runtime checks and TS types. |
-| Repo layout | npm workspaces: `shared/`, `server/`, `client/` | `shared/` holds the API and query-plan types both sides import, so they can't drift. |
-| Tests | Vitest (+ `supertest` for the API) | Same runner for all packages, TS with no extra setup. |
+| Area                   | Choice                                                                                                                              | Why                                                                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend               | React 19 + Vite + TypeScript                                                                                                        | Fast dev server, zero config TS.                                                                                                                                           |
+| Backend                | Node.js + Express + TypeScript (run with `tsx`)                                                                                     | Small, well known, easy to test with `supertest`.                                                                                                                          |
+| Database               | SQLite via `better-sqlite3`                                                                                                         | One file, no install, created by a seed script. Query path opens it **read-only**.                                                                                         |
+| UI kit                 | shadcn/ui on Tailwind CSS v4, re-themed to the passbook look in §13                                                                 | Accessible parts (menu, tooltip, table, toast) copied into our code as source files, so we can restyle them fully instead of shipping the default zinc look.               |
+| Charts                 | Recharts, through shadcn's `Chart` wrapper                                                                                          | Built for React (charts are components), bar + line out of the box, renders SVG (needed for "copy chart as image"). The wrapper reads chart colours from our theme tokens. |
+| AI layer               | Vercel AI SDK v7 (`ai`) + `@ai-sdk/google`, model `gemini-4-hydrogen`, plus a built-in `mock` provider                              | Switch model with one env var (`AI_MODEL`); other providers need only a new `@ai-sdk/*` package. Mock keeps tests running with no API key or network.                      |
+| How AI talks to the DB | AI returns a **query plan** (JSON), never SQL. Server validates the plan against an allow-list and builds parameterised SQL itself. | Meets "no unrestricted AI SQL". Prompt injection can at worst produce a plan that fails validation.                                                                        |
+| Validation             | Zod everywhere: env, request body, AI output, API response types                                                                    | One schema gives both runtime checks and TS types.                                                                                                                         |
+| API style              | REST under `/api/v1`, one JSON envelope, standard status codes (404 unknown route, 405 + `Allow` for wrong method)                  | A future breaking change ships as `/api/v2` without breaking old clients.                                                                                                  |
+| Repo layout            | npm workspaces: `shared/`, `server/`, `client/`                                                                                     | `shared/` holds the API and query-plan types both sides import, so they can't drift.                                                                                       |
+| Lint / format          | ESLint 10 (flat config, `typescript-eslint` type-aware rules, React hooks rules) + Prettier; CI runs both                           | One style, checked on every push. TypeScript is pinned to 6.0 because `typescript-eslint` doesn't support TS 7 yet.                                                        |
+| Tests                  | Vitest (+ `supertest` for the API)                                                                                                  | Same runner for all packages, TS with no extra setup.                                                                                                                      |
 
 Rejected:
 
@@ -47,7 +50,7 @@ Out of scope: login, saving chat history, follow-up questions that refer to earl
 ```
 ┌──────────── client (React) ────────────┐        ┌──────────────────────── server (Express) ────────────────────────┐
 │ ChatWindow → MessageInput              │  POST  │ validate body (Zod)                                               │
-│ AnswerCard → Kpi | Table | Chart | Text│ /api/  │   → planner: AI SDK Output.object(QueryPlanSchema) (or mock)       │
+│ AnswerCard → Kpi | Table | Chart | Text│/api/v1/│   → planner: AI SDK Output.object(QueryPlanSchema) (or mock)       │
 │ CopyMenu (text / CSV / PNG)            │  ask   │   → validatePlan: plan vs catalog allow-list                       │
 │ api/client.ts (typed fetch)            │ ─────► │   → buildQuery: catalog SQL fragments + ? params, LIMIT ≤ 100      │
 └────────────────────────────────────────┘        │   → runQuery: read-only SQLite                                     │
@@ -106,11 +109,11 @@ Seed (`server/src/db/seed.ts`, `npm run db:seed`): seeded random generator so da
 
 ## 5. Catalog (allow-list)
 
-| Dataset | Base table + joins | Metrics | Dimensions | Date column |
-|---|---|---|---|---|
-| `applications` | `onboarding_applications a JOIN branches b` | `application_count`, `approval_rate`, `rejection_rate` | `month`, `segment`, `branch`, `region`, `channel`, `status` | `a.submitted_at` |
-| `transactions` | `transactions t JOIN customers c JOIN branches b` | `transaction_count`, `total_value`, `average_value` | `month`, `customer`, `segment`, `branch`, `type` | `t.txn_date` |
-| `customers` | `customers c JOIN branches b` | `customer_count` | `segment`, `branch`, `region`, `month` (from `joined_at`) | `c.joined_at` |
+| Dataset        | Base table + joins                                | Metrics                                                | Dimensions                                                  | Date column      |
+| -------------- | ------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------- | ---------------- |
+| `applications` | `onboarding_applications a JOIN branches b`       | `application_count`, `approval_rate`, `rejection_rate` | `month`, `segment`, `branch`, `region`, `channel`, `status` | `a.submitted_at` |
+| `transactions` | `transactions t JOIN customers c JOIN branches b` | `transaction_count`, `total_value`, `average_value`    | `month`, `customer`, `segment`, `branch`, `type`            | `t.txn_date`     |
+| `customers`    | `customers c JOIN branches b`                     | `customer_count`                                       | `segment`, `branch`, `region`, `month` (from `joined_at`)   | `c.joined_at`    |
 
 Each metric stores `{ label, sql, format }`. Each dimension stores `{ label, sql, kind }`, plus `values` for category dimensions. The object key is the id. For example:
 
@@ -129,13 +132,13 @@ type QueryPlan =
   | {
       kind: 'query';
       dataset: 'applications' | 'transactions' | 'customers';
-      metrics: string[];            // 1–3 catalog metric ids
-      groupBy: string[];            // 0–2 catalog dimension ids
-      filters: { dimension: string; values: string[] }[];   // max 5, value = equality / IN
-      dateRange?: { from: string; to: string };             // YYYY-MM-DD
-      sort?: { by: string; direction: 'asc' | 'desc' };     // metric or groupBy id
-      limit?: number;               // 1–100, default 100
-      title: string;                // short chart/answer title
+      metrics: string[]; // 1–3 catalog metric ids
+      groupBy: string[]; // 0–2 catalog dimension ids
+      filters: { dimension: string; values: string[] }[]; // max 5, value = equality / IN
+      dateRange?: { from: string; to: string }; // YYYY-MM-DD
+      sort?: { by: string; direction: 'asc' | 'desc' }; // metric or groupBy id
+      limit?: number; // 1–100, default 100
+      title: string; // short chart/answer title
     }
   | { kind: 'unsupported'; reason: string };
 ```
@@ -149,9 +152,16 @@ Validation runs in three layers:
 Example: "Which branches have the highest rejection rate?" →
 
 ```json
-{ "kind": "query", "dataset": "applications", "metrics": ["rejection_rate"], "groupBy": ["branch"],
-  "filters": [], "sort": { "by": "rejection_rate", "direction": "desc" }, "limit": 10,
-  "title": "Rejection rate by branch" }
+{
+  "kind": "query",
+  "dataset": "applications",
+  "metrics": ["rejection_rate"],
+  "groupBy": ["branch"],
+  "filters": [],
+  "sort": { "by": "rejection_rate", "direction": "desc" },
+  "limit": 10,
+  "title": "Rejection rate by branch"
+}
 ```
 
 → built SQL:
@@ -166,11 +176,11 @@ GROUP BY b.name ORDER BY rejection_rate DESC LIMIT ?
 
 ### Model choice
 
-| Model | Why / why not | Price per 1M tokens (in / out) |
-|---|---|---|
-| **`gemini-4-hydrogen`** (chosen) | Newest Gemini 4 model (GA 12 Nov 2026), built for speed; supports structured outputs and thinking levels `low`–`xhigh`. Picking IDs from a short catalog doesn't need the top reasoning model. | $1.50 / $7.50 |
-| `gemini-4-carbon` | Google's "most capable reasoning model", but slower. Fallback if Hydrogen picks wrong plans: change `AI_MODEL` only. | $2.00 / $10.00 (rises to $4 / $20 on 1 Dec 2026) |
-| `gemini-3.8-flash` | Previous-generation Flash, cheaper, older. | $0.75 / $3.75 |
+| Model                            | Why / why not                                                                                                                                                                                  | Price per 1M tokens (in / out)                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| **`gemini-4-hydrogen`** (chosen) | Newest Gemini 4 model (GA 12 Nov 2026), built for speed; supports structured outputs and thinking levels `low`–`xhigh`. Picking IDs from a short catalog doesn't need the top reasoning model. | $1.50 / $7.50                                    |
+| `gemini-4-carbon`                | Google's "most capable reasoning model", but slower. Fallback if Hydrogen picks wrong plans: change `AI_MODEL` only.                                                                           | $2.00 / $10.00 (rises to $4 / $20 on 1 Dec 2026) |
+| `gemini-3.8-flash`               | Previous-generation Flash, cheaper, older.                                                                                                                                                     | $0.75 / $3.75                                    |
 
 Run Hydrogen with `thinkingLevel: 'low'` to keep answers fast. Source: Google's model list and changelog (aistudio.google.com/docs/models, checked 25 Nov 2026).
 
@@ -187,13 +197,13 @@ Run Hydrogen with `thinkingLevel: 'low'` to keep answers fast. Source: Google's 
 
 Rows are checked top to bottom; the first match wins.
 
-| Plan shape | Visual |
-|---|---|
-| `unsupported` | text only |
-| no `groupBy`, 1 metric | KPI card |
-| `groupBy` includes `month`, 1 metric | line chart (2nd dimension, if any, becomes the series) |
-| 1 category dimension, 1 metric | bar chart |
-| anything else (2 category dims, 2+ metrics) | table |
+| Plan shape                                  | Visual                                                 |
+| ------------------------------------------- | ------------------------------------------------------ |
+| `unsupported`                               | text only                                              |
+| no `groupBy`, 1 metric                      | KPI card                                               |
+| `groupBy` includes `month`, 1 metric        | line chart (2nd dimension, if any, becomes the series) |
+| 1 category dimension, 1 metric              | bar chart                                              |
+| anything else (2 category dims, 2+ metrics) | table                                                  |
 
 Every answer also carries the rows, so the UI can always switch to the table view. `summarize.ts` builds one sentence from the rows, for example "North Point has the highest rejection rate at 34.2%." Empty result → "No data matched this question."
 
@@ -206,7 +216,15 @@ type ApiResponse<T> =
   | { ok: true; data: T }
   | { ok: false; error: { code: ErrorCode; message: string; suggestions?: string[] } };
 
-type ErrorCode = 'VALIDATION_ERROR' | 'UNSUPPORTED_QUESTION' | 'AI_ERROR' | 'QUERY_ERROR' | 'RATE_LIMITED' | 'INTERNAL_ERROR';
+type ErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'UNSUPPORTED_QUESTION'
+  | 'AI_ERROR'
+  | 'QUERY_ERROR'
+  | 'RATE_LIMITED'
+  | 'NOT_FOUND'
+  | 'METHOD_NOT_ALLOWED'
+  | 'INTERNAL_ERROR';
 
 interface AskResult {
   question: string;
@@ -219,36 +237,41 @@ interface AskResult {
     | { type: 'bar' | 'line'; x: string; y: string; series?: string };
   columns: { key: string; label: string; format: 'text' | 'number' | 'percent' | 'currency' }[];
   rows: Record<string, string | number | null>[];
-  query: { dataset: string; sql: string };          // shown in a "How I got this" panel
+  query: { dataset: string; sql: string }; // shown in a "How I got this" panel
   meta: { provider: string; model: string; durationMs: number };
 }
 ```
 
-| Endpoint | Purpose |
-|---|---|
-| `POST /api/ask` `{ question: string }` | Main flow. |
-| `GET /api/catalog` | Dataset names + example questions for the UI chips. |
-| `GET /api/health` | Liveness + DB reachable. |
+| Endpoint                                  | Purpose                                                   |
+| ----------------------------------------- | --------------------------------------------------------- |
+| `POST /api/v1/ask` `{ question: string }` | Main flow.                                                |
+| `GET /api/v1/catalog`                     | Dataset names + example questions for the UI chips.       |
+| `GET /api/v1/health`                      | Liveness + DB reachable. Sends `Cache-Control: no-store`. |
 
 Error mapping:
 
-| Case | HTTP | Code |
-|---|---|---|
-| Empty, too long (>500) or non-string question | 400 | `VALIDATION_ERROR` |
-| AI says `unsupported`, or plan fails catalog check | 422 | `UNSUPPORTED_QUESTION` (with suggested questions) |
-| AI timeout / provider error | 502 | `AI_ERROR` |
-| SQLite error | 500 | `QUERY_ERROR` |
-| Too many requests | 429 | `RATE_LIMITED` |
-| Anything else | 500 | `INTERNAL_ERROR` |
+| Case                                                                  | HTTP | Code                                              |
+| --------------------------------------------------------------------- | ---- | ------------------------------------------------- |
+| Empty, too long (>500) or non-string question, or malformed JSON body | 400  | `VALIDATION_ERROR`                                |
+| Body over 10 KB                                                       | 413  | `VALIDATION_ERROR`                                |
+| AI says `unsupported`, or plan fails catalog check                    | 422  | `UNSUPPORTED_QUESTION` (with suggested questions) |
+| AI timeout / provider error                                           | 502  | `AI_ERROR`                                        |
+| SQLite error                                                          | 500  | `QUERY_ERROR`                                     |
+| Too many requests                                                     | 429  | `RATE_LIMITED`                                    |
+| Unknown route                                                         | 404  | `NOT_FOUND`                                       |
+| Wrong HTTP method on a known route (sends an `Allow` header)          | 405  | `METHOD_NOT_ALLOWED`                              |
+| Anything else                                                         | 500  | `INTERNAL_ERROR`                                  |
 
 The server logs the full error; the client only gets `code` and a friendly `message`. No stack traces leave the server.
+
+The client adds two codes of its own in `client/src/api/client.ts`, never sent by the server: `NETWORK_ERROR` (fetch failed, or a proxy answered 502/503/504 without our JSON body) and `INVALID_RESPONSE` (body doesn't match the shared Zod schema).
 
 ## 10. Security basics
 
 - Read-only SQLite connection for queries; only the seed script opens it for writing.
 - No AI-written SQL; allow-list + parameters + forced `LIMIT`.
 - Zod on request body, AI output and env vars.
-- `helmet`, CORS limited to `CLIENT_ORIGIN`, `express.json({ limit: '10kb' })`, `express-rate-limit` on `/api/ask` (20 requests per minute per IP).
+- `helmet`, CORS limited to `CLIENT_ORIGIN`, `express.json({ limit: '10kb' })`, `express-rate-limit` on `/api/v1/ask` (20 requests per minute per IP).
 - API keys only in server `.env`; never sent to the client. `.env` in `.gitignore`.
 - Generated SQL is shown to the user for transparency; it contains no secrets.
 
@@ -279,33 +302,115 @@ client/src/
   components/
     ChatWindow.tsx               // message list, auto-scroll
     MessageInput.tsx             // textarea, Enter to send, disabled while loading, 500-char counter
-    SuggestedQuestions.tsx       // chips from /api/catalog
+    SuggestedQuestions.tsx       // chips from /api/v1/catalog
     AnswerCard.tsx               // title, text, visual, Chart/Table toggle, "How I got this"
     KpiCard.tsx, DataTable.tsx, ChartView.tsx (Recharts bar/line, pivots series)
     CopyMenu.tsx                 // Copy text | Copy CSV | Copy chart (PNG)
     ErrorMessage.tsx
+    ui/                          // shadcn components (button, textarea, dropdown-menu, tooltip, table, toggle-group, collapsible, sonner, chart)
   lib/copy.ts, lib/format.ts, lib/pivot.ts
 ```
 
 - Chat history lives in React state only.
 - Copy: text and CSV via `navigator.clipboard.writeText`; chart via SVG → canvas → `ClipboardItem('image/png')`, with a "Download PNG" fallback if the browser blocks image copy.
 - Vite dev proxy sends `/api` to the server, so the client needs no env file.
-- Plain CSS, no UI library.
+- Setup: `npx shadcn@latest init` in `client/`, then add only the components listed under `ui/`. Theme tokens live in `client/src/styles.css`.
 
-## 13. Tests (minimum)
+## 13. Visual design: the Bank Passbook
 
-| File | What it proves |
-|---|---|
-| `server/test/buildQuery.test.ts` | Plan → expected SQL + params; `LIMIT` always present and capped. |
+The user asked for: paper feel, animation, uncluttered, very simple, no cognitive load; not a ChatGPT clone, not a stock shadcn template.
+
+**Idea.** The conversation is a bank passbook. Each question and its answer print as one dated, ruled entry on a tinted security-paper page. A branch manager has handled passbooks for years, so the layout reads without explanation: date on the left, particulars in the middle, the figure on the right.
+
+**Scene.** An ops manager at an office desktop in daylight, glancing over between tasks. That makes it a light theme only, with large figures and nothing to learn first.
+
+### Palette (Restrained: neutrals plus one accent)
+
+| Token        | Hex                  | Use                                                                             |
+| ------------ | -------------------- | ------------------------------------------------------------------------------- |
+| `--page`     | `#EEF3EF`            | Page ground: pale green security tint. Not cream.                               |
+| `--ink`      | `#23262B`            | All text and rules.                                                             |
+| `--ink-soft` | `#5B6660`            | Secondary text (date, labels). 5.3:1 contrast on `--page`.                      |
+| `--cover`    | `#1F4D3A`            | Passbook-cover green: top band, primary button, focus ring, first chart series. |
+| `--stamp`    | `#B23A2E`            | Only for refusals, errors and the `REJECTED` status. Never decoration.          |
+| `--rule`     | `#C9D6CD`            | 1px ruled lines between entries and table rows.                                 |
+| chart 2, 3   | `#3E5F7D`, `#9A7330` | Second and third series (slate ink, brass). Never more than three.              |
+
+Map these onto shadcn's CSS variables (`--background`, `--foreground`, `--primary`, `--destructive`, `--border`, `--chart-1..3`) and set `--radius: 0`. Square corners everywhere, like printed stationery.
+
+### Type
+
+- **Public Sans** (self-hosted via `@fontsource/public-sans`) for everything you read: questions, answer sentences, labels, buttons. Figures use `font-variant-numeric: tabular-nums`, so numbers line up and don't jitter while counting up.
+- **Courier Prime** (`@fontsource/courier-prime`) only for the printed parts of an entry: entry number, date, and the SQL in "How I got this". It's the passbook printer's voice. Never use it for body text.
+- Scale: answer figure 48px, entry question 17px semibold, answer sentence 17px, labels 13px. Keep the answer sentence under 70 characters per line.
+
+### Layout
+
+- **Top band:** a slim cover-green strip with the product name in white. Nothing else in it: no avatars, settings or nav.
+- **The page:** one passbook page, max 960px wide, centred on the tint, with a faint security pattern (a repeating guilloche SVG, the fine looping-line pattern on banknotes and cheques, at 4% opacity) and a soft shadow so it reads as a sheet lying on a desk.
+- **Each entry is a ruled row in three columns**, like a passbook:
+  - **Left (96px):** entry number `No. 014` and date, in Courier Prime.
+  - **Middle:** the question in semibold, then the answer sentence, then the visual (KPI, chart or table).
+  - **Right:** the actions (Copy menu, Chart/Table toggle). They stay quiet (ink-soft icons) until the row is hovered or focused.
+- **Entries are separated by 1px rules.** No cards, no bubbles, no avatars, no left/right alignment for "me vs AI". The question and the answer belong to the same entry.
+- **Input:** a teller's slip pinned to the bottom of the page: a ruled textarea labelled "Ask about branches, customers, applications or transactions", with a cover-green "Print answer" button. Enter sends; Shift+Enter adds a new line. A character count appears from 450 characters; the limit is 500.
+- **"How I got this":** a collapsible line under each answer showing the dataset and the SQL in Courier Prime. Closed by default.
+- **Under 640px:** the date column folds into a header line above the question; charts go full width; the slip stays pinned.
+
+### Motion: the printing effect
+
+- **Loading:** the new entry appears with its number and date already printed, and a thin print-head bar slides along the empty line with the words "Printing…".
+- **Answer arrives:** lines print top to bottom. Each line wipes in left to right with `clip-path` over 200ms, ease-out, starting 50ms after the line above. The KPI counts up to its value over 600ms. Bars grow and lines draw in with Recharts' built-in animation over 700ms.
+- **Refusal or error:** a red rubber stamp, `NOT IN LEDGER` (question outside the catalog) or `COULD NOT PRINT` (technical error), presses on once: scales from 1.15 to 1 over 180ms and stays rotated −3°. Below it are a plain-English reason and up to three suggested questions as clickable printed lines. Errors also offer a "Try again" button.
+- **Copy:** a small Sonner toast, "Copied to clipboard", bottom right.
+- **`prefers-reduced-motion`:** everything appears at once, no wipe, count-up or stamp press.
+- Nothing else moves: no hover bounces and no animated backgrounds.
+
+### Empty state (first visit)
+
+The blank first page of the passbook: one sentence, "Ask a question about this bank's branches, customers, onboarding and transactions.", then the four example questions from the brief printed as ruled lines you can click. Clicking one sends it.
+
+### Finishing details
+
+- `::selection` in pale cover-green, `caret-color: var(--cover)`, a thin themed scrollbar, and a 2px cover-green focus ring with 2px offset.
+- Amounts are formatted in INR (`₹12,34,567`); percentages to one decimal place.
+- Icons come from lucide (shadcn's default), stroke 1.5, one size. No emoji or sparkle "AI" icons.
+- `aria-live="polite"` on the entry list so screen readers hear new answers. Every chart has a table view.
+
+### Never
+
+Kicker or eyebrow labels above headings; grids of same-size cards; gradient text; glass or blur; coloured side borders on alerts; chat bubbles or avatars; the default shadcn zinc theme; dark mode; red used for anything other than refusals, errors and `REJECTED`.
+
+### Direction contract (paste as the first child of `<body>` in `client/index.html`)
+
+```html
+<!--
+THESIS: The chat is a bank passbook; each answer prints as one dated, ruled entry. Refuses the centred AI-chat column with bubbles.
+OWN-WORLD: Pale green security-tint page, ink text, passbook-cover green as the only accent, red rubber stamp for refusals; square corners, 1px rules, Public Sans with tabular figures, Courier Prime for printed lines.
+STORY: The manager asks in plain words, watches the answer print, reads one figure, copies it on.
+FIRST VIEWPORT: Cover-green band; one passbook page; empty state prints four example questions as ruled lines; teller's slip input pinned at the foot with "Print answer".
+FORM: Bank Passbook, position 1 on the grounded list, seed b33de222.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+```
+
+## 14. Tests (minimum)
+
+| File                               | What it proves                                                                                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/test/buildQuery.test.ts`   | Plan → expected SQL + params; `LIMIT` always present and capped.                                                                                                  |
 | `server/test/validatePlan.test.ts` | Rejects unknown dataset/metric, a metric from the wrong dataset, a filter value not in the list, and an injection attempt like `"segment; DROP TABLE customers"`. |
-| `server/test/ask.api.test.ts` | With `AI_PROVIDER=mock` and a seeded temp DB: rejection-rate question → 200, bar chart, rows sorted desc; empty question → 400; off-topic question → 422. |
+| `server/test/ask.api.test.ts`      | With `AI_PROVIDER=mock` and a seeded temp DB: rejection-rate question → 200, bar chart, rows sorted desc; empty question → 400; off-topic question → 422.         |
 
-## 14. Repo layout and scripts
+## 15. Repo layout and scripts
 
 ```
 conversational-data-analyst/
-  package.json              # workspaces: shared, server, client
+  package.json              # workspaces: shared, server, client; engines node >=26
   tsconfig.base.json        # strict: true, noUncheckedIndexedAccess: true
+  vitest.config.ts          # test.projects: server, client
+  eslint.config.js  .prettierrc.json  .prettierignore  .editorconfig  .nvmrc
+  .github/workflows/ci.yml  # format:check, lint, typecheck, test, build on push + PR
   .env.example  .gitignore  README.md  SPEC.md
   shared/  server/  client/
 ```
@@ -318,8 +423,14 @@ Root scripts:
 npm install
 npm run db:seed        # creates server/data/bank.db
 npm run dev            # server :3001 + client :5173 (concurrently)
+npm run dev:server     # server only
+npm run dev:client     # client only
 npm test               # vitest in all workspaces
 npm run typecheck      # tsc --noEmit everywhere
+npm run lint           # eslint .
+npm run format         # prettier --write .
+npm run format:check   # prettier --check . (CI)
+npm run build          # vite build for the client
 ```
 
 `.env.example`:
@@ -333,23 +444,25 @@ AI_MODEL=gemini-4-hydrogen  # or gemini-4-carbon
 GOOGLE_GENERATIVE_AI_API_KEY=
 ```
 
-Versions checked on 25 Nov 2026: `better-sqlite3` 13.2.0 installs on Node 26 without compiling (prebuilt binary works); `ai` 7.0.181; `@ai-sdk/google` 4.0.126.
+Versions checked on 25 Nov 2026: `better-sqlite3` 13.2.0 installs on Node 26 without compiling (prebuilt binary works); `ai` 7.0.181; `@ai-sdk/google` 4.0.126; `typescript` 6.0.3 (7.0.2 is out, but `typescript-eslint` 8.74.0 supports only `<6.1`); `eslint` 10.15.0; `prettier` 3.10.1.
 
-## 15. 60-minute build order (one commit per step)
+The server loads the root `.env` with Node's `--env-file-if-exists` flag (through `tsx`); every env var has a default, so `npm run dev` works without a `.env`.
 
-| Min | Step | Commit |
-|---|---|---|
-| 0–5 | `git init`, first commit (spec), then `gh repo create conversational-data-analyst --private --source . --push`; workspaces, tsconfig, `.gitignore`, `.env.example`, copy this spec | `chore: scaffold workspaces` |
-| 5–15 | `shared` types + plan schema; schema.sql + seed; catalog | `feat: banking schema, seed data and query catalog` |
-| 15–25 | `validatePlan`, `buildQuery`, `runQuery` + their tests | `feat: safe query builder with allow-list validation` |
-| 25–35 | AI provider (AI SDK + mock), prompt, `/api/ask`, error handler, security middleware, API test | `feat: ask endpoint with AI query planner` |
-| 35–50 | Chat UI, answer card, KPI/table/charts, copy menu, error states | `feat: chat UI with charts and copy actions` |
-| 50–57 | README (architecture, assumptions, done, limits, productionising, AI disclosure) | `docs: README and setup instructions` |
-| 57–60 | Buffer: run tests, typecheck, final push | — |
+## 16. 60-minute build order (one commit per step)
 
-If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/catalog` (hard-code chips), extra mock-planner variants (keep the four example questions).
+| Min   | Step                                                                                                                                                                               | Commit                                                |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 0–5   | `git init`, first commit (spec), then `gh repo create conversational-data-analyst --private --source . --push`; workspaces, tsconfig, `.gitignore`, `.env.example`, copy this spec | `chore: scaffold workspaces`                          |
+| 5–15  | `shared` types + plan schema; schema.sql + seed; catalog                                                                                                                           | `feat: banking schema, seed data and query catalog`   |
+| 15–25 | `validatePlan`, `buildQuery`, `runQuery` + their tests                                                                                                                             | `feat: safe query builder with allow-list validation` |
+| 25–35 | AI provider (AI SDK + mock), prompt, `/api/v1/ask`, error handler, security middleware, API test                                                                                   | `feat: ask endpoint with AI query planner`            |
+| 35–50 | `shadcn init` + passbook theme tokens (§13), chat UI, answer entry, KPI/table/charts, copy menu, error states                                                                      | `feat: chat UI with charts and copy actions`          |
+| 50–57 | README (architecture, assumptions, done, limits, productionising, AI disclosure)                                                                                                   | `docs: README and setup instructions`                 |
+| 57–60 | Buffer: run tests, typecheck, final push                                                                                                                                           | —                                                     |
 
-## 16. README outline (submission)
+If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/catalog` (hard-code chips), extra mock-planner variants (keep the four example questions).
+
+## 17. README outline (submission)
 
 1. What it does + screenshot
 2. Setup (Node version, `npm install`, `npm run db:seed`, `.env`, `npm run dev`, `npm test`)
@@ -360,7 +473,7 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/catalog
 7. Productionising: Postgres with a read-only DB role and statement timeout; auth + per-user rate limits; move catalog to config/semantic layer; AI response caching; observability (request IDs, structured logs, AI latency/cost metrics); eval set of questions → expected plans run in CI; compile `shared` with project references; Docker + CI pipeline
 8. AI tools used and decisions I made myself (query-plan approach over AI SQL, catalog allow-list, deterministic visual choice and summaries, SQLite, AI SDK for model switching, Gemini 4 Hydrogen for speed, workspaces with shared types)
 
-## 17. Settled answers
+## 18. Settled answers
 
 - Model: `gemini-4-hydrogen` via a real Gemini API key; mock only for tests.
 - Repo: private on GitHub, made public when sharing.
@@ -369,6 +482,6 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/catalog
 
 - Currency: all amounts are INR. Format with `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })` (e.g. ₹12,34,567.00) in `client/src/lib/format.ts` and in `summarize.ts`.
 
-## 18. Open questions
+## 19. Open questions
 
 None.
