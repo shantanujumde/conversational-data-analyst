@@ -105,7 +105,7 @@ CREATE INDEX idx_apps_submitted ON onboarding_applications(submitted_at);
 CREATE INDEX idx_txn_customer   ON transactions(customer_id);
 ```
 
-Seed (`server/src/db/seed.ts`, `npm run db:seed`): seeded random generator so data is the same on every run (tests rely on this). 8 branches, 200 customers, 1,500 applications over the last 12 months, 5,000 transactions. Each branch gets a fixed rejection rate between 10% and 35%, with one clear highest.
+Seed (`server/src/db/seed.ts`, `npm run db:seed`): seeded random generator and a fixed end date (`SEED_END_DATE = 2026-11-30`), so data is the same on every run (tests rely on this). 8 branches, 200 customers, 1,500 applications over the 12 months up to that date, 5,000 transactions. Each branch gets a fixed rejection rate between 10% and 35%, with one clear highest.
 
 ## 5. Catalog (allow-list)
 
@@ -146,7 +146,7 @@ type QueryPlan =
 Validation runs in three layers:
 
 1. **Shape**: Zod parse of the AI output (the AI SDK does this, we parse again on the server).
-2. **Catalog check** (`validatePlan.ts`): dataset exists; every metric and dimension belongs to that dataset; filter values for category dimensions are in the allowed `values` list; `sort.by` is a selected metric or dimension; dates are valid and `from ≤ to`.
+2. **Catalog check** (`validatePlan.ts`): dataset exists; every metric and dimension belongs to that dataset; filter values for category dimensions are in the allowed `values` list (case-insensitive, mapped to the stored spelling); a dimension with no fixed list (`customer`) can be grouped by but not filtered on; an id may not repeat; `sort.by` is a selected metric or dimension; dates are valid and `from ≤ to`.
 3. **Build** (`buildQuery.ts`): SQL is assembled only from catalog fragments. User or AI values go in `?` placeholders. `LIMIT` is always present and capped at 100.
 
 Example: "Which branches have the highest rejection rate?" →
@@ -197,15 +197,16 @@ Run Hydrogen with `thinkingLevel: 'low'` to keep answers fast. Source: Google's 
 
 Rows are checked top to bottom; the first match wins.
 
-| Plan shape                                  | Visual                                                 |
-| ------------------------------------------- | ------------------------------------------------------ |
-| `unsupported`                               | text only                                              |
-| no `groupBy`, 1 metric                      | KPI card                                               |
-| `groupBy` includes `month`, 1 metric        | line chart (2nd dimension, if any, becomes the series) |
-| 1 category dimension, 1 metric              | bar chart                                              |
-| anything else (2 category dims, 2+ metrics) | table                                                  |
+| Plan shape                                                       | Visual                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
+| `unsupported`                                                    | text only                                              |
+| no `groupBy`, 1 metric                                           | KPI card                                               |
+| `groupBy` includes `month`, 1 metric, not sorted by the metric   | line chart (2nd dimension, if any, becomes the series) |
+| `groupBy` is `month` only, sorted by the metric ("top 3 months") | bar chart in metric order                              |
+| 1 category dimension, 1 metric                                   | bar chart                                              |
+| anything else (2 category dims, 2+ metrics)                      | table                                                  |
 
-Every answer also carries the rows, so the UI can always switch to the table view. `summarize.ts` builds one sentence from the rows, for example "North Point has the highest rejection rate at 34.2%." Empty result → "No data matched this question."
+Every answer also carries the rows, so the UI can always switch to the table view. `summarize.ts` builds one sentence from the rows and catalog labels, never from AI text: for example "North Point has the highest rejection rate at 34.2%." or, for a KPI, "Applications with status Rejected: 292." Months and stored categories are shown readably ("December 2025", "Retail"). Empty result (no rows, or one row whose metrics are all NULL) → "No data matched this question." A 0 is a real answer and is shown.
 
 ## 9. API
 
@@ -526,6 +527,8 @@ The user asked for: paper feel, animation, uncluttered, very simple, no cognitiv
 | `--rule`     | `#C9D6CD`            | 1px ruled lines between entries and table rows.                                 |
 | chart 2, 3   | `#3E5F7D`, `#9A7330` | Second and third series (slate ink, brass). Never more than three.              |
 
+Derived shades of these colours, not new hues, are allowed as tokens: `--sheet` (the page sheet, a lighter tint of `--page`, which stays the ground around it), `--cover-wash`, `--cover-hover`, `--muted`, `--shadow-ink`.
+
 Map these onto shadcn's CSS variables (`--background`, `--foreground`, `--primary`, `--destructive`, `--border`, `--chart-1..3`) and set `--radius: 0`. Square corners everywhere, like printed stationery.
 
 ### Type
@@ -651,7 +654,7 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/cata
 3. Architecture (diagram from §3, the query-plan safety model)
 4. Assumptions (questions are single-turn; data is synthetic; all amounts in INR; rejection rate = rejected ÷ all applications, pending included)
 5. Completed functionality (checklist against the brief)
-6. Known limitations (only catalog questions; no follow-ups; no auth; SQLite; single-node rate limit; no AI retry)
+6. Known limitations (only catalog questions; no follow-ups; no auth; SQLite; single-node rate limit; slow free-tier AI calls, one retry)
 7. Productionising: Postgres with a read-only DB role and statement timeout; auth + per-user rate limits; move catalog to config/semantic layer; AI response caching; observability (ship the structured logs to a log store, metrics and alerts on AI latency, cost and error rates); eval set of questions → expected plans run in CI; compile `shared` with project references; Docker + CI pipeline
 8. AI tools used and decisions I made myself (query-plan approach over AI SQL, catalog allow-list, deterministic visual choice and summaries, SQLite, AI SDK for model switching, Gemini 4 Hydrogen for speed, workspaces with shared types)
 
@@ -663,6 +666,9 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/cata
 - `better-sqlite3` install verified on Node 26.
 
 - Currency: all amounts are INR. Format with `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })` (e.g. ₹12,34,567.00) in `client/src/lib/format.ts` and in `summarize.ts`.
+
+- Small server extras kept after review: filter values match case-insensitively; an incoming `X-Request-Id` is reused only if it is plain text up to 128 characters; clean shutdown on SIGINT/SIGTERM; optional `LOG_LEVEL`; the `/ask` rate limit is configurable as `ASK_RATE_LIMIT_PER_MINUTE` (default 20).
+- `GET /api/v1/catalog` returns the four brief questions as `examples`; refusals draw 3 suggestions from a longer list.
 
 ## 20. Open questions
 

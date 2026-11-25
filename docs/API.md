@@ -66,13 +66,13 @@ Messages are the exact texts in SPEC §10.1. No stack traces, SQL error text or 
 - **Segment, status, channel, type values** are upper case as stored (`RETAIL`, `SME`, `CORPORATE`, `REJECTED`, …). The client decides how to display them.
 - **Visual** is chosen by the server (SPEC §8):
 
-| `visualization`                            | Rows                                                                                                                                   |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `{ type: 'kpi', valueKey, format }`        | Exactly 1 row. `valueKey` is the metric id.                                                                                            |
-| `{ type: 'bar', x, y }`                    | `x` = dimension id, `y` = metric id. Already sorted by the server.                                                                     |
-| `{ type: 'line', x: 'month', y, series? }` | Sorted by month ascending. With `series`, rows are long format: one row per month and series value. The client pivots them for charts. |
-| `{ type: 'table' }`                        | Any shape. Show `columns` in order.                                                                                                    |
-| `{ type: 'text' }`                         | Empty result or no visual. `rows` may be `[]`.                                                                                         |
+| `visualization`                            | Rows                                                                                                                                                                                                                                                                        |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: 'kpi', valueKey, format }`        | Exactly 1 row. `valueKey` is the metric id.                                                                                                                                                                                                                                 |
+| `{ type: 'bar', x, y }`                    | `x` = dimension id, `y` = metric id. Already sorted by the server.                                                                                                                                                                                                          |
+| `{ type: 'line', x: 'month', y, series? }` | Only when the question isn't a ranking. Sorted by month ascending. A ranking of months ("top 3 months") comes back as `bar` with `x: 'month'`, in metric order. With `series`, rows are long format: one row per month and series value. The client pivots them for charts. |
+| `{ type: 'table' }`                        | Any shape. Show `columns` in order.                                                                                                                                                                                                                                         |
+| `{ type: 'text' }`                         | Empty result or no visual. `rows` may be `[]`.                                                                                                                                                                                                                              |
 
 - **Empty result** is a success: `rows: []`, `visualization: { type: 'text' }`, `text: "No data matched this question."`.
 - Every answer carries `rows` and `columns`, so the client can always show a table view.
@@ -90,7 +90,7 @@ Messages are the exact texts in SPEC §10.1. No stack traces, SQL error text or 
   "data": {
     "question": "How many onboarding applications were rejected?",
     "title": "Rejected applications",
-    "text": "There are 312 rejected applications.",
+    "text": "Applications with status Rejected: 312.",
     "visualization": { "type": "kpi", "valueKey": "application_count", "format": "number" },
     "columns": [{ "key": "application_count", "label": "Applications", "format": "number" }],
     "rows": [{ "application_count": 312 }],
@@ -144,7 +144,7 @@ Messages are the exact texts in SPEC §10.1. No stack traces, SQL error text or 
   "data": {
     "question": "Show monthly onboarding applications by customer segment",
     "title": "Monthly applications by segment",
-    "text": "Applications peaked in 2026-10 with 151 across all segments.",
+    "text": "Applications peaked in October 2026 for Retail at 92.",
     "visualization": {
       "type": "line",
       "x": "month",
