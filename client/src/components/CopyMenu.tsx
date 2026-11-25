@@ -12,7 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ChartModel } from '@/lib/chartModel';
 import { resolveColor } from '@/lib/chartSeries';
-import { canCopyImage, copyPng, copyText, downloadBlob, pngFilename, svgToPng } from '@/lib/copy';
+import { copyPng, copyText, downloadBlob, pngFilename, svgToPng } from '@/lib/copy';
 import { toCsv } from '@/lib/csv';
 import { logError } from '@/lib/log';
 
@@ -32,8 +32,6 @@ async function copyOrWarn(text: string) {
 
 /** Copy the answer sentence, the rows as CSV, or the chart as a PNG. */
 export function CopyMenu({ result, chart }: CopyMenuProps) {
-  const imageClipboard = canCopyImage();
-
   function renderPng(): Promise<Blob> | null {
     const svg = chart?.root.current?.querySelector<SVGSVGElement>('svg.recharts-surface');
     if (!chart || !svg) return null;
@@ -52,11 +50,11 @@ export function CopyMenu({ result, chart }: CopyMenuProps) {
     });
   }
 
-  async function downloadChart(png: Promise<Blob>, afterBlocked: boolean) {
+  /** The clipboard refused the image (blocked or unsupported): save the PNG instead (SPEC §10.3). */
+  async function downloadChart(png: Promise<Blob>) {
     try {
       downloadBlob(await png, pngFilename(result.title));
-      if (afterBlocked)
-        toast.error(BLOCKED, { description: 'Downloaded the chart as a PNG instead.' });
+      toast.error(BLOCKED, { description: 'Downloaded the chart as a PNG instead.' });
     } catch (err) {
       logError('chart export failed', err);
       toast.error("Couldn't make an image of this chart.");
@@ -65,10 +63,13 @@ export function CopyMenu({ result, chart }: CopyMenuProps) {
 
   async function copyChart() {
     const png = renderPng();
-    if (!png) return;
+    if (!png) {
+      toast.error(BLOCKED);
+      return;
+    }
     // Start the clipboard write inside the click; the PNG finishes rendering inside it.
     if (await copyPng(png)) toast.success(COPIED);
-    else await downloadChart(png, true);
+    else await downloadChart(png);
   }
 
   return (
@@ -107,18 +108,8 @@ export function CopyMenu({ result, chart }: CopyMenuProps) {
           </DropdownMenuItem>
         )}
         {chart && (
-          <DropdownMenuItem
-            className="rounded-none py-2"
-            onSelect={() => {
-              if (imageClipboard) {
-                void copyChart();
-                return;
-              }
-              const png = renderPng();
-              if (png) void downloadChart(png, false);
-            }}
-          >
-            {imageClipboard ? 'Copy chart as PNG' : 'Download chart as PNG'}
+          <DropdownMenuItem className="rounded-none py-2" onSelect={() => void copyChart()}>
+            Copy chart as PNG
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

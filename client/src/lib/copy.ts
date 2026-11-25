@@ -9,7 +9,7 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 /** Whether this browser can put an image on the clipboard at all. */
-export function canCopyImage(): boolean {
+function canCopyImage(): boolean {
   return (
     typeof ClipboardItem !== 'undefined' &&
     typeof navigator.clipboard !== 'undefined' &&

@@ -64,11 +64,7 @@ export function TellerSlip({ onSubmit }: TellerSlipProps) {
         </Button>
       </div>
       {text.length >= COUNT_FROM && (
-        <p
-          id={`${id}-count`}
-          className="tabular mt-1 text-right text-[13px] text-ink-soft"
-          aria-live="polite"
-        >
+        <p id={`${id}-count`} className="tabular mt-1 text-right text-[13px] text-ink-soft">
           {text.length} / {QUESTION_MAX_LENGTH}
         </p>
       )}

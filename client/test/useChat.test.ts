@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatReducer, type Entry } from '../src/hooks/useChat';
+import { chatReducer, DEFAULT_RETRY_AFTER_SECONDS, type Entry } from '../src/hooks/useChat';
 import { barAnswer, rateLimitedError, refusalError } from './fixtures';
 
 const at = new Date(2026, 10, 25, 10, 0);
@@ -48,6 +48,19 @@ describe('chatReducer', () => {
     });
 
     expect(next[0]?.state).toMatchObject({ status: 'failed', retryAt: 1000 + 42_000 });
+  });
+
+  it('waits the default 10 s when a rate limit has no retryAfterSeconds', () => {
+    const { retryAfterSeconds: _, ...noWait } = rateLimitedError;
+    const next = chatReducer(asked(), {
+      type: 'settled',
+      id: 1,
+      result: { ok: false, error: noWait },
+      now: 1000,
+    });
+
+    expect(DEFAULT_RETRY_AFTER_SECONDS).toBe(10);
+    expect(next[0]?.state).toMatchObject({ status: 'failed', retryAt: 1000 + 10_000 });
   });
 
   it('puts a failed entry back to pending on retry, keeping its number and question', () => {

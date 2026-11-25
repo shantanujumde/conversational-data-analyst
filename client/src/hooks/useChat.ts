@@ -23,9 +23,15 @@ export type ChatAction =
   | { type: 'retried'; id: number }
   | { type: 'settled'; id: number; result: ApiResult<AskResult>; now: number };
 
+/** Wait used when a RATE_LIMITED error has no `retryAfterSeconds`, so Try again never opens at once. */
+export const DEFAULT_RETRY_AFTER_SECONDS = 10;
+
 function settle(result: ApiResult<AskResult>, now: number): EntryState {
   if (result.ok) return { status: 'answered', result: result.data };
-  const wait = result.error.code === 'RATE_LIMITED' ? result.error.retryAfterSeconds : undefined;
+  const wait =
+    result.error.code === 'RATE_LIMITED'
+      ? (result.error.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS)
+      : undefined;
   return {
     status: 'failed',
     error: result.error,

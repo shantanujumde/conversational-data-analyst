@@ -40,7 +40,7 @@ export const errorView: Record<ClientErrorCode, ErrorView> = {
   RATE_LIMITED: {
     stamp: 'COULD NOT PRINT',
     retry: true,
-    fallbackMessage: 'Too many questions at once. Please wait a moment and try again.',
+    fallbackMessage: 'Too many questions at once. Try again in a few seconds.',
   },
   NOT_FOUND: {
     stamp: null,
@@ -73,3 +73,12 @@ export const errorView: Record<ClientErrorCode, ErrorView> = {
     fallbackMessage: "The server sent an answer we couldn't read. Please try again.",
   },
 };
+
+/**
+ * The RATE_LIMITED message, built from the live countdown so it never goes stale
+ * (the server's "Try again in 42 seconds" is only true when it arrives).
+ */
+export function rateLimitMessage(secondsLeft: number): string {
+  if (secondsLeft <= 0) return 'Too many questions at once. You can try again now.';
+  return `Too many questions at once. Try again in ${secondsLeft} ${secondsLeft === 1 ? 'second' : 'seconds'}.`;
+}

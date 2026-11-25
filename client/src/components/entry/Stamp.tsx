@@ -2,7 +2,7 @@ import { CornerDownRight, RotateCcw } from 'lucide-react';
 import type { ClientError } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { useCountdown } from '@/hooks/useCountdown';
-import { errorView } from '@/lib/errorView';
+import { errorView, rateLimitMessage } from '@/lib/errorView';
 
 interface StampProps {
   error: ClientError;
@@ -17,6 +17,11 @@ export function Stamp({ error, retryAt, onRetry, onAsk }: StampProps) {
   const view = errorView[error.code];
   const secondsLeft = useCountdown(retryAt);
   const suggestions = (error.suggestions ?? []).slice(0, 3);
+  // The server's "Try again in 42 seconds" goes stale; count down live instead.
+  const message =
+    error.code === 'RATE_LIMITED'
+      ? rateLimitMessage(secondsLeft)
+      : error.message || view.fallbackMessage;
 
   return (
     <div className="flex flex-col items-start gap-3">
@@ -29,11 +34,14 @@ export function Stamp({ error, retryAt, onRetry, onAsk }: StampProps) {
         </p>
       )}
 
-      <p className="max-w-[68ch] text-[17px] text-ink">{error.message || view.fallbackMessage}</p>
+      {error.requestId && (
+        <p className="font-print text-[13px] text-ink-soft">Ref: {error.requestId}</p>
+      )}
+
+      <p className="max-w-[68ch] text-[17px] text-ink">{message}</p>
 
       {suggestions.length > 0 && (
         <div className="w-full max-w-[560px]">
-          <p className="mb-1 text-[13px] text-ink-soft">You could ask:</p>
           <ul className="border-t border-rule">
             {suggestions.map((s) => (
               <li key={s} className="border-b border-rule">
@@ -70,10 +78,6 @@ export function Stamp({ error, retryAt, onRetry, onAsk }: StampProps) {
             'Try again'
           )}
         </Button>
-      )}
-
-      {error.requestId && (
-        <p className="font-print text-[13px] text-ink-soft">Ref: {error.requestId}</p>
       )}
     </div>
   );

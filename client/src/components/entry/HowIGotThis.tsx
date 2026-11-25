@@ -10,9 +10,6 @@ const DATASET_LABELS: Record<string, string> = {
 
 /** Where the answer came from: dataset and the checked SQL. Closed by default. */
 export function HowIGotThis({ result }: { result: AskResult }) {
-  const seconds = (result.meta.durationMs / 1000).toFixed(1);
-  const planner = result.meta.provider === 'mock' ? 'the built-in planner' : result.meta.model;
-
   return (
     <Collapsible className="group/how">
       <CollapsibleTrigger className="-ml-1 inline-flex items-center gap-1 px-1 py-0.5 text-[13px] text-ink-soft hover:text-ink">
@@ -34,11 +31,6 @@ export function HowIGotThis({ result }: { result: AskResult }) {
             <pre className="font-print text-[13px] leading-relaxed break-words whitespace-pre-wrap text-ink">
               {result.query.sql}
             </pre>
-          </dd>
-          <dt className="text-ink-soft">Planned by</dt>
-          <dd className="text-ink">
-            {planner}, {seconds} s. The AI picked the dataset and measures; the server wrote the
-            query.
           </dd>
         </dl>
       </CollapsibleContent>

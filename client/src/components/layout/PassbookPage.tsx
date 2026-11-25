@@ -56,13 +56,6 @@ export function PassbookPage({ children, footer }: PassbookPageProps) {
     <main className="mx-auto w-full max-w-[960px] sm:px-4 sm:pt-6">
       <div className="relative flex min-h-[calc(100dvh-3rem)] flex-col bg-sheet shadow-[0_1px_2px_rgb(35_38_43/0.06),0_12px_32px_-8px_rgb(35_38_43/0.14)] sm:min-h-[calc(100dvh-4.5rem)]">
         <Guilloche />
-        <div
-          aria-hidden="true"
-          className="relative hidden grid-cols-[96px_1fr] gap-x-6 border-b-2 border-double border-rule px-8 pt-5 pb-2 text-[13px] text-ink-soft sm:grid"
-        >
-          <span>Entry</span>
-          <span>Particulars</span>
-        </div>
         <div className="relative flex-1">{children}</div>
         <div className="sticky bottom-0 z-10">{footer}</div>
       </div>
