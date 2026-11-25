@@ -20,13 +20,19 @@ export function ApiResponseSchema<T extends z.ZodType>(data: T) {
 
 export const QUESTION_MAX_LENGTH = 500;
 
-export const AskRequestSchema = z.object({
-  question: z
-    .string('Please type a question.')
-    .trim()
-    .min(1, 'Please type a question.')
-    .max(QUESTION_MAX_LENGTH, 'Questions can be up to 500 characters.'),
-});
+const EMPTY_QUESTION = 'Please type a question.';
+
+/** A missing body, a non-object body and a non-string question all get the same message we wrote. */
+export const AskRequestSchema = z.object(
+  {
+    question: z
+      .string(EMPTY_QUESTION)
+      .trim()
+      .min(1, EMPTY_QUESTION)
+      .max(QUESTION_MAX_LENGTH, `Questions can be up to ${QUESTION_MAX_LENGTH} characters.`),
+  },
+  EMPTY_QUESTION,
+);
 export type AskRequest = z.infer<typeof AskRequestSchema>;
 
 /**
@@ -36,13 +42,22 @@ export type AskRequest = z.infer<typeof AskRequestSchema>;
 export const ValueFormatSchema = z.enum(['text', 'number', 'percent', 'currency']);
 export type ValueFormat = z.infer<typeof ValueFormatSchema>;
 
+/** Formats a metric can have: every value format except plain text. */
+export const MetricFormatSchema = ValueFormatSchema.exclude(['text']);
+export type MetricFormat = z.infer<typeof MetricFormatSchema>;
+
+/** Which planner produced the answer: Gemini, or the keyword mock used in tests. */
+export const AI_PROVIDERS = ['google', 'mock'] as const;
+export const AiProviderSchema = z.enum(AI_PROVIDERS);
+export type AiProvider = z.infer<typeof AiProviderSchema>;
+
 export const VisualizationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text') }),
   z.object({
     type: z.literal('kpi'),
     /** Metric id; `rows` has exactly one row. */
     valueKey: z.string(),
-    format: ValueFormatSchema.exclude(['text']),
+    format: MetricFormatSchema,
   }),
   z.object({ type: z.literal('table') }),
   z.object({
@@ -67,6 +82,10 @@ export type Column = z.infer<typeof ColumnSchema>;
 export const CellValueSchema = z.union([z.string(), z.number(), z.null()]);
 export type CellValue = z.infer<typeof CellValueSchema>;
 
+/** One result row, keyed by catalog id. */
+export const RowSchema = z.record(z.string(), CellValueSchema);
+export type Row = z.infer<typeof RowSchema>;
+
 export const AskResultSchema = z.object({
   question: z.string(),
   title: z.string(),
@@ -75,11 +94,11 @@ export const AskResultSchema = z.object({
   visualization: VisualizationSchema,
   /** Dimension columns first, then metric columns. */
   columns: z.array(ColumnSchema),
-  rows: z.array(z.record(z.string(), CellValueSchema)),
+  rows: z.array(RowSchema),
   /** Shown in the "How I got this" panel. */
   query: z.object({ dataset: z.string(), sql: z.string() }),
   meta: z.object({
-    provider: z.enum(['google', 'mock']),
+    provider: AiProviderSchema,
     model: z.string(),
     durationMs: z.number().nonnegative(),
   }),
