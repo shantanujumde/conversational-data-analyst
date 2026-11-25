@@ -13,7 +13,10 @@ import type { z } from 'zod';
 export type ClientErrorCode = ErrorCode | 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
 
 export type ApiResult<T> =
-  ApiSuccess<T> | ApiFailure<Omit<ErrorBody, 'code'> & { code: ClientErrorCode }>;
+  | ApiSuccess<T>
+  | ApiFailure<
+      Omit<ErrorBody, 'code' | 'requestId'> & { code: ClientErrorCode; requestId?: string }
+    >;
 
 // Texts from SPEC §10.1. They move to lib/errorView.ts with the chat UI.
 const CLIENT_ERROR_MESSAGE = {

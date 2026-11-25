@@ -186,7 +186,7 @@ Run Hydrogen with `thinkingLevel: 'low'` to keep answers fast. Source: Google's 
 
 ### Files
 
-- `server/src/ai/provider.ts`: reads `AI_PROVIDER` (`google` | `mock`) and `AI_MODEL`, returns an AI SDK model (`google(AI_MODEL)`) or the mock planner. Fails fast at startup if `GOOGLE_GENERATIVE_AI_API_KEY` is missing when the provider is `google`.
+- `server/src/ai/provider.ts`: reads `AI_PROVIDER` (`google` | `mock`) and `AI_MODEL`, returns an AI SDK model (`createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY })(AI_MODEL)`) or the mock planner. Fails fast at startup if `GEMINI_API_KEY` is missing when the provider is `google`.
 - `server/src/ai/prompt.ts`: system prompt built **from the catalog object** (so prompt and allow-list never disagree), plus today's date. Rules: pick only listed IDs; return `unsupported` with a reason if the question can't be answered from these datasets. Put the question only in the user message, wrapped in `<question>` tags. Never paste it into the system prompt.
 - `server/src/ai/planner.ts`: one call to `generateText({ model, system, prompt, output: Output.object({ schema: QueryPlanSchema }), providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } }, abortSignal: AbortSignal.timeout(15_000) })`. Read the plan from the result's `output`. No retries in v1. (`generateObject` still exists in AI SDK v7, but `generateText` + `Output.object` is the current pattern.)
 - `server/src/ai/mockPlanner.ts`: keyword rules that return fixed plans for the four example questions and a few variants; everything else returns `unsupported`. Used by tests.
@@ -623,7 +623,7 @@ CLIENT_ORIGIN=http://localhost:5173
 DATABASE_PATH=./data/bank.db
 AI_PROVIDER=google          # google | mock (tests force mock)
 AI_MODEL=gemini-4-hydrogen  # or gemini-4-carbon
-GOOGLE_GENERATIVE_AI_API_KEY=
+GEMINI_API_KEY=
 ```
 
 Versions checked on 25 Nov 2026: `better-sqlite3` 13.2.0 installs on Node 26 without compiling (prebuilt binary works); `ai` 7.0.181; `@ai-sdk/google` 4.0.126; `typescript` 6.0.3 (7.0.2 is out, but `typescript-eslint` 8.74.0 supports only `<6.1`); `eslint` 10.15.0; `prettier` 3.10.1.

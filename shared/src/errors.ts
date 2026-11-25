@@ -17,7 +17,10 @@ export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
 export const ErrorBodySchema = z.object({
   code: ErrorCodeSchema,
+  /** Safe to show the user; always written by the server. */
   message: z.string(),
+  /** Same value as the X-Request-Id response header. */
+  requestId: z.string(),
   suggestions: z.array(z.string()).optional(),
   retryAfterSeconds: z.number().int().positive().optional(),
 });

@@ -24,7 +24,11 @@ describe('getHealth', () => {
   });
 
   it('passes a server error body through unchanged', async () => {
-    const error = { code: 'INTERNAL_ERROR', message: 'Something went wrong on our side.' };
+    const error = {
+      code: 'INTERNAL_ERROR',
+      message: 'Something went wrong on our side.',
+      requestId: 'req-123',
+    };
     stubFetch(() => Promise.resolve(Response.json({ ok: false, error }, { status: 500 })));
 
     await expect(getHealth()).resolves.toEqual({ ok: false, error });

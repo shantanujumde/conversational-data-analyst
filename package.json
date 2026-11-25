@@ -15,6 +15,7 @@
     "dev": "concurrently -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
+    "db:seed": "npm run db:seed -w server",
     "test": "vitest run",
     "typecheck": "npm run typecheck --workspaces",
     "lint": "eslint .",
