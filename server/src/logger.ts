@@ -13,7 +13,14 @@ export function createLogger(level: LogLevel): Logger {
     level,
     base: { service: 'cda-server' },
     redact: {
-      paths: ['req.headers.authorization', 'req.headers.cookie', '*.apiKey', '*.GEMINI_API_KEY'],
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        '*.apiKey',
+        '*.GEMINI_API_KEY',
+        '*.OPENAI_API_KEY',
+        '*.API_KEY',
+      ],
       censor: '[redacted]',
     },
     ...(pretty && level !== 'silent'

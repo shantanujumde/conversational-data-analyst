@@ -2,6 +2,7 @@ import { type AiProvider, type QueryPlanQuery, QueryPlanSchema } from '@cda/shar
 import { APICallError, generateText, type LanguageModel, Output } from 'ai';
 import { AppError } from '../errors';
 import { unsupportedQuestion } from '../query/unsupported';
+import { AiPlanSchema, toQueryPlanInput } from './aiPlanSchema';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
 /** Time allowed for one model call. Free-tier Gemini often needs 15–20 s. */
@@ -25,10 +26,19 @@ export function isRetryable(err: unknown): boolean {
   return APICallError.isInstance(err) && err.isRetryable;
 }
 
+/** Low reasoning effort keeps answers fast; each provider reads only its own key. */
+const PROVIDER_OPTIONS = {
+  google: { thinkingConfig: { thinkingLevel: 'low' } },
+  openai: { reasoningEffort: 'low' },
+};
+
 /** Plans with a real model through the AI SDK: up to 2 attempts, 30 s each. */
-export function createAiPlanner(model: LanguageModel, modelId: string): Planner {
+export function createAiPlanner(
+  model: LanguageModel,
+  { provider, model: modelId }: { provider: Exclude<AiProvider, 'mock'>; model: string },
+): Planner {
   return {
-    provider: 'google',
+    provider,
     model: modelId,
     async plan(question) {
       const call = async () => {
@@ -36,12 +46,12 @@ export function createAiPlanner(model: LanguageModel, modelId: string): Planner 
           model,
           instructions: buildSystemPrompt(new Date()),
           prompt: buildUserPrompt(question),
-          output: Output.object({ schema: QueryPlanSchema, name: 'query_plan' }),
-          providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } },
+          output: Output.object({ schema: AiPlanSchema, name: 'query_plan' }),
+          providerOptions: PROVIDER_OPTIONS,
           abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
           maxRetries: 0, // retries are handled below, so the timeout covers each attempt
         });
-        return result.output as unknown;
+        return toQueryPlanInput(result.output);
       };
 
       let output: unknown;
@@ -55,7 +65,7 @@ export function createAiPlanner(model: LanguageModel, modelId: string): Planner 
         }
       }
 
-      // The SDK already checked the shape; check again so nothing unparsed reaches the query layer.
+      // The SDK checked the flat shape; check the rebuilt plan so nothing unparsed reaches the query layer.
       const parsed = QueryPlanSchema.safeParse(output);
       if (!parsed.success) {
         throw new AppError('AI_ERROR', undefined, {}, { cause: parsed.error });

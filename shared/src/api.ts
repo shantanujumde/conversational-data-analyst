@@ -46,8 +46,8 @@ export type ValueFormat = z.infer<typeof ValueFormatSchema>;
 export const MetricFormatSchema = ValueFormatSchema.exclude(['text']);
 export type MetricFormat = z.infer<typeof MetricFormatSchema>;
 
-/** Which planner produced the answer: Gemini, or the keyword mock used in tests. */
-export const AI_PROVIDERS = ['google', 'mock'] as const;
+/** Which planner produced the answer: Gemini, OpenAI, or the keyword mock used in tests. */
+export const AI_PROVIDERS = ['google', 'openai', 'mock'] as const;
 export const AiProviderSchema = z.enum(AI_PROVIDERS);
 export type AiProvider = z.infer<typeof AiProviderSchema>;
 
