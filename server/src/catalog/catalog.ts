@@ -2,8 +2,9 @@
  * The allow-list (docs/SPEC.md §5). The AI may only pick ids from here, and the
  * server builds SQL only from these fragments. Object keys are the ids.
  */
-import type { DatasetId } from '@cda/shared';
+import { type CatalogResponse, DATASET_IDS, type DatasetId } from '@cda/shared';
 import { BRANCHES } from '../db/seed';
+import { EXAMPLE_QUESTIONS } from './examples';
 
 export type MetricFormat = 'number' | 'percent' | 'currency';
 
@@ -124,4 +125,16 @@ export function getMetric(dataset: Dataset, id: string): Metric | undefined {
 /** Looks up a dimension on a dataset without walking the prototype chain. */
 export function getDimension(dataset: Dataset, id: string): Dimension | undefined {
   return Object.hasOwn(dataset.dimensions, id) ? dataset.dimensions[id] : undefined;
+}
+
+/** What `GET /api/v1/catalog` returns: dataset names and example questions for the UI. */
+export function getCatalogSummary(): CatalogResponse {
+  return {
+    datasets: DATASET_IDS.map((id) => ({
+      id,
+      label: CATALOG[id].label,
+      description: CATALOG[id].description,
+    })),
+    examples: [...EXAMPLE_QUESTIONS],
+  };
 }

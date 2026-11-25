@@ -1,5 +1,8 @@
+import { createPlanner } from './ai/provider';
 import { createApp } from './app';
 import { type Config, ConfigError, loadConfig } from './config';
+import { type Db, openReadOnly } from './db/connection';
+import { createLogger } from './logger';
 
 function loadConfigOrExit(): Config {
   try {
@@ -12,18 +15,56 @@ function loadConfigOrExit(): Config {
 }
 
 const config = loadConfigOrExit();
-const app = createApp(config);
+const logger = createLogger(config.LOG_LEVEL);
 
-const server = app.listen(config.PORT, () => {
-  console.log(`Server listening on http://localhost:${config.PORT}`);
-});
-
-function shutdown(signal: string) {
-  console.log(`${signal} received, closing server.`);
-  server.close(() => process.exit(0));
-  // Don't hang forever on open keep-alive connections.
-  setTimeout(() => process.exit(1), 5_000).unref();
+function openDatabaseOrExit(): Db {
+  try {
+    return openReadOnly(config.DATABASE_PATH);
+  } catch (err) {
+    logger.fatal(
+      { err, path: config.DATABASE_PATH },
+      'Could not open the database. Run `npm run db:seed` first.',
+    );
+    process.exit(1);
+  }
 }
 
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+const db = openDatabaseOrExit();
+const planner = createPlanner(config);
+const app = createApp({ config, db, planner, logger });
+
+const server = app.listen(config.PORT, () => {
+  logger.info(
+    { port: config.PORT, provider: planner.provider, model: planner.model },
+    `Server listening on http://localhost:${config.PORT}`,
+  );
+});
+
+let closing = false;
+function shutdown(exitCode: number) {
+  if (closing) return;
+  closing = true;
+  server.close(() => {
+    db.close();
+    process.exit(exitCode);
+  });
+  // Don't hang forever on open keep-alive connections.
+  setTimeout(() => process.exit(exitCode), 5_000).unref();
+}
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server.');
+  shutdown(0);
+});
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server.');
+  shutdown(0);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.fatal({ err: reason }, 'Unhandled promise rejection');
+  shutdown(1);
+});
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'Uncaught exception');
+  shutdown(1);
+});
