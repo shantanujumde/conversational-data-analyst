@@ -42,7 +42,7 @@ describe('validatePlan', () => {
     expect(result.dataset.label).toBe('Onboarding applications');
     expect(result.metrics.map((m) => m.id)).toEqual(['rejection_rate']);
     expect(result.groupBy.map((g) => g.id)).toEqual(['branch']);
-    expect(result.limit).toBe(10);
+    expect(result.plan.limit).toBe(10);
   });
 
   it('normalises the case of category filter values to the stored spelling', () => {
@@ -63,11 +63,6 @@ describe('validatePlan', () => {
     );
 
     expect(result.groupBy.map((g) => g.id)).toEqual(['customer']);
-  });
-
-  it('defaults the limit to 100 and caps larger values', () => {
-    expect(validatePlan(plan({ limit: undefined })).limit).toBe(100);
-    expect(validatePlan(plan({ limit: 5000 })).limit).toBe(100);
   });
 
   it.each([

@@ -1,4 +1,8 @@
-import { MAX_LIMIT, type ValidatedPlan } from './validatePlan';
+import { isTimeDimension } from '../catalog/catalog';
+import type { ValidatedPlan } from './validatePlan';
+
+/** Most rows a query may return; also the limit when the plan sets none (docs/SPEC.md §6). */
+export const MAX_LIMIT = 100;
 
 export type SqlParam = string | number;
 
@@ -41,7 +45,7 @@ export function buildQuery(validated: ValidatedPlan): BuiltQuery {
   if (orderBy) sql += ` ORDER BY ${orderBy}`;
 
   sql += ' LIMIT ?';
-  params.push(Math.min(Math.max(1, Math.trunc(validated.limit)), MAX_LIMIT));
+  params.push(Math.min(Math.max(1, Math.trunc(plan.limit ?? MAX_LIMIT)), MAX_LIMIT));
 
   return { sql, params };
 }
@@ -50,7 +54,7 @@ export function buildQuery(validated: ValidatedPlan): BuiltQuery {
 function orderClause({ plan, metrics, groupBy }: ValidatedPlan): string | undefined {
   if (plan.sort) return `${plan.sort.by} ${plan.sort.direction.toUpperCase()}`;
   if (groupBy.length === 0) return undefined;
-  if (groupBy.some((g) => g.dimension.kind === 'time')) {
+  if (groupBy.some((g) => isTimeDimension(g.dimension))) {
     return groupBy.map((g) => `${g.id} ASC`).join(', ');
   }
   const first = metrics[0];

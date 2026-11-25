@@ -9,8 +9,12 @@ import { createTestDb } from './helpers/testDb';
 const testDb = createTestDb();
 afterAll(() => testDb.cleanup());
 
-const config = loadConfig({ AI_PROVIDER: 'mock', NODE_ENV: 'test' });
-const app = createApp({ config, db: testDb.db, planner: createMockPlanner(), askRateLimit: false });
+const config = loadConfig({
+  AI_PROVIDER: 'mock',
+  NODE_ENV: 'test',
+  ASK_RATE_LIMIT_PER_MINUTE: '1000',
+});
+const app = createApp({ config, db: testDb.db, planner: createMockPlanner() });
 
 describe('GET /api/v1/health', () => {
   it('returns 200 with a valid health body and no caching', async () => {
@@ -31,7 +35,6 @@ describe('GET /api/v1/health', () => {
       config,
       db: closed.db,
       planner: createMockPlanner(),
-      askRateLimit: false,
     });
 
     const res = await request(degradedApp).get('/api/v1/health');

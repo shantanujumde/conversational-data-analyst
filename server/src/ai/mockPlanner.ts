@@ -1,4 +1,5 @@
-import type { QueryPlan, QueryPlanQuery } from '@cda/shared';
+import type { QueryPlanQuery } from '@cda/shared';
+import { unsupportedQuestion } from '../query/unsupported';
 import type { Planner } from './planner';
 
 type Plan = Omit<QueryPlanQuery, 'kind'>;
@@ -117,7 +118,7 @@ const RULES: Rule[] = [
   },
 ];
 
-/** Keyword rules instead of a model, for tests and offline use. Anything unknown is unsupported. */
+/** Keyword rules instead of a model, for tests and offline use. Anything unknown throws UNSUPPORTED_QUESTION. */
 export function createMockPlanner(): Planner {
   return {
     provider: 'mock',
@@ -140,10 +141,10 @@ export function createMockPlanner(): Planner {
       }
 
       const rule = RULES.find((r) => r.match.every((pattern) => pattern.test(q)));
-      const plan: QueryPlan = rule
-        ? { kind: 'query', ...rule.plan }
-        : { kind: 'unsupported', reason: 'No mock rule matches this question.' };
-      return Promise.resolve(plan);
+      if (!rule) {
+        return Promise.reject(unsupportedQuestion('No mock rule matches this question.'));
+      }
+      return Promise.resolve({ kind: 'query', ...rule.plan });
     },
   };
 }

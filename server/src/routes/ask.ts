@@ -6,13 +6,12 @@ import { AppError } from '../errors';
 import { methodNotAllowed } from '../middleware/notFound';
 import { askQuestion } from '../services/askService';
 
-export function askRouter(deps: { db: Db; planner: Planner; rateLimit?: RequestHandler }): Router {
+export function askRouter(deps: { db: Db; planner: Planner; rateLimit: RequestHandler }): Router {
   const router = Router();
-  const limit: RequestHandler[] = deps.rateLimit ? [deps.rateLimit] : [];
 
   router
     .route('/ask')
-    .post(...limit, async (req, res) => {
+    .post(deps.rateLimit, async (req, res) => {
       const parsed = AskRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         throw new AppError('VALIDATION_ERROR', parsed.error.issues[0]?.message);

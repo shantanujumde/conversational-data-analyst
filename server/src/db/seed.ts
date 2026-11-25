@@ -5,6 +5,13 @@
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  BRANCHES,
+  type Channel,
+  type Segment,
+  type Status,
+  type TxnType,
+} from '../catalog/referenceData';
 import { resolveDatabasePath } from '../config';
 import { type Db, openWritable } from './connection';
 import { Random } from './random';
@@ -14,32 +21,9 @@ export const SEED = 20261125;
 export const SEED_END_DATE = '2026-11-30';
 export const COUNTS = { customers: 200, applications: 1500, transactions: 5000 } as const;
 
-type Region = 'North' | 'South' | 'East' | 'West';
-type Segment = 'RETAIL' | 'SME' | 'CORPORATE';
-
-interface BranchSeed {
-  name: string;
-  city: string;
-  region: Region;
-  /** Share of this branch's applications that are rejected. */
-  rejectionRate: number;
-}
-
-/** Fictional branch names. North Point is the clear highest rejection rate. */
-export const BRANCHES: readonly BranchSeed[] = [
-  { name: 'North Point', city: 'Delhi', region: 'North', rejectionRate: 0.34 },
-  { name: 'Ridge Avenue', city: 'Chandigarh', region: 'North', rejectionRate: 0.16 },
-  { name: 'Harbour Road', city: 'Chennai', region: 'South', rejectionRate: 0.27 },
-  { name: 'Lake View', city: 'Bengaluru', region: 'South', rejectionRate: 0.12 },
-  { name: 'Mill Square', city: 'Kolkata', region: 'East', rejectionRate: 0.22 },
-  { name: 'River Gate', city: 'Bhubaneswar', region: 'East', rejectionRate: 0.19 },
-  { name: 'Market Street', city: 'Mumbai', region: 'West', rejectionRate: 0.14 },
-  { name: 'Fort Lane', city: 'Ahmedabad', region: 'West', rejectionRate: 0.1 },
-];
-
 const SEGMENT_WEIGHTS: Record<Segment, number> = { RETAIL: 65, SME: 25, CORPORATE: 10 };
-const CHANNEL_WEIGHTS = { BRANCH: 35, ONLINE: 40, MOBILE: 25 } as const;
-const TYPE_WEIGHTS = { CREDIT: 50, DEBIT: 50 } as const;
+const CHANNEL_WEIGHTS: Record<Channel, number> = { BRANCH: 35, ONLINE: 40, MOBILE: 25 };
+const TYPE_WEIGHTS: Record<TxnType, number> = { CREDIT: 50, DEBIT: 50 };
 
 /** Transaction amount range in INR, per segment. */
 const AMOUNT_RANGE: Record<Segment, [number, number]> = {
@@ -160,7 +144,7 @@ export function seedDatabase(db: Db): void {
     });
     const pendingSince = addDays(end, -PENDING_WINDOW_DAYS);
     for (const app of applications) {
-      const status = rejected.has(app.id)
+      const status: Status = rejected.has(app.id)
         ? 'REJECTED'
         : app.submittedAt > pendingSince
           ? 'PENDING'

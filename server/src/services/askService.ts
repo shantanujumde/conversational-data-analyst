@@ -1,5 +1,5 @@
 import type { AskResult } from '@cda/shared';
-import { unsupportedQuestion, type Planner } from '../ai/planner';
+import type { Planner } from '../ai/planner';
 import { chooseVisualization } from '../answer/chooseVisualization';
 import { summarize } from '../answer/summarize';
 import type { Db } from '../db/connection';
@@ -22,7 +22,6 @@ export async function askQuestion(
   const started = performance.now();
 
   const plan = await planner.plan(question);
-  if (plan.kind === 'unsupported') throw unsupportedQuestion(plan.reason);
   log.info({ plan }, 'Planned question');
 
   const validated = validatePlan(plan);

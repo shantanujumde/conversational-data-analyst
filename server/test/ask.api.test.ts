@@ -17,11 +17,14 @@ import { createTestDb } from './helpers/testDb';
 const testDb = createTestDb();
 afterAll(() => testDb.cleanup());
 
-const config = loadConfig({ AI_PROVIDER: 'mock', NODE_ENV: 'test' });
-const makeApp = (
-  planner: Planner = createMockPlanner(),
-  askRateLimit: false | { windowMs: number; limit: number } = false,
-) => createApp({ config, db: testDb.db, planner, askRateLimit });
+/** A high rate limit, so only the rate-limit test ever hits it. */
+const config = loadConfig({
+  AI_PROVIDER: 'mock',
+  NODE_ENV: 'test',
+  ASK_RATE_LIMIT_PER_MINUTE: '1000',
+});
+const makeApp = (planner: Planner = createMockPlanner(), appConfig = config) =>
+  createApp({ config: appConfig, db: testDb.db, planner });
 const app = makeApp();
 
 const ask = (question: unknown, target = app) =>
@@ -256,7 +259,7 @@ describe('POST /api/v1/ask', () => {
   });
 
   it('rate limits with 429, Retry-After and retryAfterSeconds', async () => {
-    const limited = makeApp(createMockPlanner(), { windowMs: 60_000, limit: 1 });
+    const limited = makeApp(createMockPlanner(), { ...config, ASK_RATE_LIMIT_PER_MINUTE: 1 });
     okData(await ask('Which branches have the highest rejection rate?', limited));
 
     const res = await ask('Which branches have the highest rejection rate?', limited);

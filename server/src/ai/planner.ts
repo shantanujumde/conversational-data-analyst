@@ -1,7 +1,7 @@
-import { type QueryPlan, QueryPlanSchema } from '@cda/shared';
+import { type AiProvider, type QueryPlanQuery, QueryPlanSchema } from '@cda/shared';
 import { APICallError, generateText, type LanguageModel, Output } from 'ai';
-import { SUGGESTIONS } from '../catalog/examples';
 import { AppError } from '../errors';
+import { unsupportedQuestion } from '../query/unsupported';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
 /** Time allowed for one model call. Free-tier Gemini often needs 15–20 s. */
@@ -9,21 +9,14 @@ export const AI_TIMEOUT_MS = 30_000;
 /** One automatic retry when the provider is busy (timeout, 429, 5xx). */
 export const AI_MAX_ATTEMPTS = 2;
 
-/** Turns a question into a query plan. Tests inject their own. */
+/**
+ * Turns a question into a query plan. Tests inject their own.
+ * A question the catalog can't answer throws UNSUPPORTED_QUESTION (`unsupportedQuestion`).
+ */
 export interface Planner {
-  readonly provider: 'google' | 'mock';
+  readonly provider: AiProvider;
   readonly model: string;
-  plan(question: string): Promise<QueryPlan>;
-}
-
-/** The error for a question the catalog can't answer. The reason is logged, not shown. */
-export function unsupportedQuestion(reason: string): AppError {
-  return new AppError(
-    'UNSUPPORTED_QUESTION',
-    undefined,
-    { suggestions: [...SUGGESTIONS] },
-    { cause: new Error(`AI marked the question unsupported: ${reason}`) },
-  );
+  plan(question: string): Promise<QueryPlanQuery>;
 }
 
 /** True for failures worth one more try: our timeout, or a provider status the SDK marks retryable (429, 5xx). */
@@ -67,7 +60,9 @@ export function createAiPlanner(model: LanguageModel, modelId: string): Planner 
       if (!parsed.success) {
         throw new AppError('AI_ERROR', undefined, {}, { cause: parsed.error });
       }
-      if (parsed.data.kind === 'unsupported') throw unsupportedQuestion(parsed.data.reason);
+      if (parsed.data.kind === 'unsupported') {
+        throw unsupportedQuestion(`AI marked the question unsupported: ${parsed.data.reason}`);
+      }
       return parsed.data;
     },
   };

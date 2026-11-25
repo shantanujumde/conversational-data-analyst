@@ -13,26 +13,19 @@ export function securityMiddleware(config: Pick<Config, 'CLIENT_ORIGIN'>): Reque
   return [helmet(), cors({ origin: config.CLIENT_ORIGIN }), express.json({ limit: '10kb' })];
 }
 
-export interface RateLimitOptions {
-  windowMs: number;
-  /** Requests allowed per IP per window. */
-  limit: number;
-}
+const MINUTE_MS = 60_000;
 
-/** 20 questions per minute per IP (docs/SPEC.md §11). */
-export const ASK_RATE_LIMIT: RateLimitOptions = { windowMs: 60_000, limit: 20 };
-
-/** Per-IP limit for the ask endpoint. Over the limit → RATE_LIMITED through the error handler. */
-export function askRateLimit({ windowMs, limit }: RateLimitOptions): RequestHandler {
+/** Per-IP limit for the ask endpoint (docs/SPEC.md §11). Over the limit → RATE_LIMITED through the error handler. */
+export function askRateLimit(limitPerMinute: number): RequestHandler {
   return rateLimit({
-    windowMs,
-    limit,
+    windowMs: MINUTE_MS,
+    limit: limitPerMinute,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     handler(req, res, next) {
       const resetTime = (req as typeof req & { rateLimit?: { resetTime?: Date } }).rateLimit
         ?.resetTime;
-      const msLeft = resetTime ? resetTime.getTime() - Date.now() : windowMs;
+      const msLeft = resetTime ? resetTime.getTime() - Date.now() : MINUTE_MS;
       const seconds = Math.max(1, Math.ceil(msLeft / 1000));
       res.set('Retry-After', String(seconds));
       next(rateLimited(seconds));

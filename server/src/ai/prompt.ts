@@ -1,16 +1,15 @@
-import { CATALOG, type Dataset } from '../catalog/catalog';
+import { CATALOG, type Dataset, isTimeDimension } from '../catalog/catalog';
 
 function describeDataset(id: string, dataset: Dataset): string {
   const metrics = Object.entries(dataset.metrics).map(
     ([metricId, m]) => `  - ${metricId}: ${m.label} (${m.format})`,
   );
   const dimensions = Object.entries(dataset.dimensions).map(([dimId, d]) => {
-    const values =
-      d.kind === 'time'
-        ? 'values are YYYY-MM months'
-        : d.filterable === false
-          ? 'any name; group by only, never filter on it'
-          : `values: ${(d.values ?? []).join(', ')}`;
+    const values = isTimeDimension(d)
+      ? 'values are YYYY-MM months'
+      : d.filterable === false
+        ? 'any name; group by only, never filter on it'
+        : `values: ${(d.values ?? []).join(', ')}`;
     return `  - ${dimId}: ${d.label} (${values})`;
   });
   return [

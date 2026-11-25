@@ -4,7 +4,7 @@ import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { createMockPlanner } from '../src/ai/mockPlanner';
 import { createAiPlanner } from '../src/ai/planner';
-import { EXAMPLE_QUESTIONS } from '../src/catalog/examples';
+import { EXAMPLE_QUESTIONS, SUGGESTIONS } from '../src/catalog/examples';
 import { loadConfig } from '../src/config';
 import { validatePlan } from '../src/query/validatePlan';
 
@@ -153,14 +153,14 @@ describe('mock planner', () => {
 
     for (const question of EXAMPLE_QUESTIONS) {
       const plan = await planner.plan(question);
-      expect(plan.kind, question).toBe('query');
-      if (plan.kind === 'query') expect(() => validatePlan(plan)).not.toThrow();
+      expect(() => validatePlan(plan), question).not.toThrow();
     }
   });
 
-  it('marks anything else unsupported', async () => {
-    await expect(createMockPlanner().plan("What's the weather in Mumbai?")).resolves.toMatchObject({
-      kind: 'unsupported',
+  it('throws UNSUPPORTED_QUESTION for anything else, like the AI planner', async () => {
+    await expect(createMockPlanner().plan("What's the weather in Mumbai?")).rejects.toMatchObject({
+      code: 'UNSUPPORTED_QUESTION',
+      extra: { suggestions: SUGGESTIONS },
     });
   });
 });
@@ -174,5 +174,15 @@ describe('config', () => {
 
   it('names the variable that is wrong', () => {
     expect(() => loadConfig({ AI_PROVIDER: 'openai' })).toThrow(/AI_PROVIDER/);
+  });
+
+  it('reads the ask rate limit, 20 per minute by default', () => {
+    expect(loadConfig({ AI_PROVIDER: 'mock' }).ASK_RATE_LIMIT_PER_MINUTE).toBe(20);
+    expect(
+      loadConfig({ AI_PROVIDER: 'mock', ASK_RATE_LIMIT_PER_MINUTE: '5' }).ASK_RATE_LIMIT_PER_MINUTE,
+    ).toBe(5);
+    expect(() => loadConfig({ AI_PROVIDER: 'mock', ASK_RATE_LIMIT_PER_MINUTE: '0' })).toThrow(
+      /ASK_RATE_LIMIT_PER_MINUTE/,
+    );
   });
 });

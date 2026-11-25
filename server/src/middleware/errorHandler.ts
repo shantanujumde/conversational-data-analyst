@@ -1,15 +1,12 @@
-import { randomUUID } from 'node:crypto';
 import type { ApiFailure } from '@cda/shared';
 import type { ErrorRequestHandler } from 'express';
 import { toAppError } from '../errors';
-import { REQUEST_ID_HEADER } from './requestLogger';
 
 /** The only place that writes an error response. Logs once, sends only safe fields. */
 export const errorHandler: ErrorRequestHandler = (err: unknown, req, res, _next) => {
   const appError = toAppError(err);
-  // pino-http sets req.id; the fallback only matters if a request skipped it.
-  const requestId = typeof req.id === 'string' ? req.id : randomUUID();
-  res.set(REQUEST_ID_HEADER, requestId);
+  // requestLogger already set req.id (always a string) and the X-Request-Id header.
+  const requestId = req.id as string;
 
   const { cause } = appError;
   if (appError.status >= 500) {

@@ -5,32 +5,41 @@ import {
   type Dimension,
   getDimension,
   getMetric,
+  isTimeDimension,
   type Metric,
 } from '../catalog/catalog';
-import { SUGGESTIONS } from '../catalog/examples';
-import { AppError } from '../errors';
+import { unsupportedQuestion } from './unsupported';
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-export const MAX_LIMIT = 100;
+
+/** A metric id from the plan with its catalog entry. */
+export interface SelectedMetric {
+  readonly id: string;
+  readonly metric: Metric;
+}
+
+/** A dimension id from the plan with its catalog entry. */
+export interface SelectedDimension {
+  readonly id: string;
+  readonly dimension: Dimension;
+}
+
+/** A filter whose values are checked and spelled as stored. */
+export interface SelectedFilter extends SelectedDimension {
+  readonly values: string[];
+}
 
 export interface ValidatedPlan {
   readonly plan: QueryPlanQuery;
   readonly dataset: Dataset;
-  readonly metrics: readonly { id: string; metric: Metric }[];
-  readonly groupBy: readonly { id: string; dimension: Dimension }[];
-  readonly filters: readonly { id: string; dimension: Dimension; values: string[] }[];
-  /** Always set, 1–100. */
-  readonly limit: number;
+  readonly metrics: readonly SelectedMetric[];
+  readonly groupBy: readonly SelectedDimension[];
+  readonly filters: readonly SelectedFilter[];
 }
 
 /** A plan that breaks a catalog rule. The rule goes to the log as the cause; the user sees suggestions. */
 function reject(rule: string): never {
-  throw new AppError(
-    'UNSUPPORTED_QUESTION',
-    undefined,
-    { suggestions: [...SUGGESTIONS] },
-    { cause: new Error(`Plan rejected: ${rule}`) },
-  );
+  throw unsupportedQuestion(`Plan rejected: ${rule}`);
 }
 
 function isRealDate(value: string): boolean {
@@ -40,7 +49,7 @@ function isRealDate(value: string): boolean {
 
 /** Checks a filter value against the dimension and returns its stored spelling. */
 function normalizeValue(id: string, dimension: Dimension, value: string): string {
-  if (dimension.kind === 'time') {
+  if (isTimeDimension(dimension)) {
     if (!MONTH.test(value)) reject(`filter ${id}: "${value}" is not a YYYY-MM month`);
     return value;
   }
@@ -89,8 +98,10 @@ export function validatePlan(plan: QueryPlanQuery): ValidatedPlan {
     if (from > to) reject('dateRange.from is after dateRange.to');
   }
 
-  const limit = plan.limit ?? MAX_LIMIT;
-  if (!Number.isInteger(limit) || limit < 1) reject('limit must be a positive integer');
+  // buildQuery sets the default and the cap of 100; this only refuses a nonsense value.
+  if (plan.limit !== undefined && (!Number.isInteger(plan.limit) || plan.limit < 1)) {
+    reject('limit must be a positive integer');
+  }
 
   return {
     plan: { ...plan, filters: filters.map((f) => ({ dimension: f.id, values: f.values })) },
@@ -98,6 +109,5 @@ export function validatePlan(plan: QueryPlanQuery): ValidatedPlan {
     metrics,
     groupBy,
     filters,
-    limit: Math.min(limit, MAX_LIMIT),
   };
 }

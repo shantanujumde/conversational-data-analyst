@@ -1,6 +1,6 @@
-import type { CellValue, Column, Visualization } from '@cda/shared';
+import type { CellValue, Column, Row, Visualization } from '@cda/shared';
+import { isTimeDimension } from '../catalog/catalog';
 import type { ValidatedPlan } from '../query/validatePlan';
-import type { Row } from '../query/runQuery';
 
 export interface ShapedAnswer {
   visualization: Visualization;
@@ -10,7 +10,7 @@ export interface ShapedAnswer {
 }
 
 /** Percent fractions are kept to 4 decimals (0.3405 → "34.1%" in the UI). */
-function tidy(value: CellValue, format: Column['format']): CellValue {
+function roundPercents(value: CellValue, format: Column['format']): CellValue {
   if (typeof value === 'number' && format === 'percent') return Math.round(value * 10_000) / 10_000;
   return value;
 }
@@ -35,7 +35,7 @@ function isSortedByMetric({ plan, metrics }: ValidatedPlan): boolean {
 }
 
 /** Picks the visual from the plan shape (docs/SPEC.md §8). First match wins. */
-function pick(validated: ValidatedPlan): Visualization {
+function chooseChartType(validated: ValidatedPlan): Visualization {
   const { metrics, groupBy } = validated;
   const [metric] = metrics;
   if (!metric || metrics.length !== 1) return { type: 'table' };
@@ -44,7 +44,7 @@ function pick(validated: ValidatedPlan): Visualization {
     return { type: 'kpi', valueKey: metric.id, format: metric.metric.format };
   }
 
-  const time = groupBy.find((g) => g.dimension.kind === 'time');
+  const time = groupBy.find((g) => isTimeDimension(g.dimension));
   // A month plan sorted by a metric is a ranking, not a time series: it falls through to a bar chart.
   if (time && !isSortedByMetric(validated)) {
     const series = groupBy.find((g) => g !== time);
@@ -78,9 +78,9 @@ export function chooseVisualization(validated: ValidatedPlan, rawRows: Row[]): S
   }
 
   const rows = rawRows.map((row) =>
-    Object.fromEntries(columns.map((c) => [c.key, tidy(row[c.key] ?? null, c.format)])),
+    Object.fromEntries(columns.map((c) => [c.key, roundPercents(row[c.key] ?? null, c.format)])),
   );
-  const visualization = pick(validated);
+  const visualization = chooseChartType(validated);
 
   if (visualization.type === 'line') {
     const { x, series } = visualization;

@@ -1,5 +1,4 @@
-import type { CellValue, ValueFormat } from '@cda/shared';
-import type { Row } from '../query/runQuery';
+import type { CellValue, Row, ValueFormat } from '@cda/shared';
 import type { ValidatedPlan } from '../query/validatePlan';
 import type { ShapedAnswer } from './chooseVisualization';
 

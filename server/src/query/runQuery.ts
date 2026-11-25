@@ -1,9 +1,7 @@
-import type { CellValue } from '@cda/shared';
+import type { Row } from '@cda/shared';
 import type { Db } from '../db/connection';
 import { AppError } from '../errors';
 import type { BuiltQuery } from './buildQuery';
-
-export type Row = Record<string, CellValue>;
 
 /** Runs a built query on the read-only connection. Any SQLite error becomes QUERY_ERROR. */
 export function runQuery(db: Db, { sql, params }: BuiltQuery): Row[] {
