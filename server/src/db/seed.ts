@@ -159,7 +159,7 @@ export function seedDatabase(db: Db, { today = new Date() }: SeedOptions = {}): 
     const rejected = new Set<number>();
     BRANCHES.forEach((branch, index) => {
       const ids = applications.filter((a) => a.branchIndex === index).map((a) => a.id);
-      const count = Math.round(ids.length * branch.rejectionRate);
+      const count = Math.ceil(ids.length * branch.rejectionRate);
       for (const id of rng.shuffle(ids).slice(0, count)) rejected.add(id);
     });
     const pendingSince = addDays(end, -PENDING_WINDOW_DAYS);
