@@ -106,6 +106,15 @@ describe('POST /api/v1/ask', () => {
     ]);
   });
 
+  it('compares retail and SME onboarding volumes as a two-bar chart', async () => {
+    const data = okData(await ask('Compare retail and SME onboarding volumes.'));
+
+    expect(data.visualization).toEqual({ type: 'bar', x: 'segment', y: 'application_count' });
+    expect(data.rows.map((r) => r.segment).sort()).toEqual(['RETAIL', 'SME']);
+    expect(data.rows.every((r) => typeof r.application_count === 'number')).toBe(true);
+    expect(data.query.sql).toMatch(/a\.segment IN \(\?, \?\)/);
+  });
+
   it('formats INR in the top customers answer', async () => {
     const data = okData(await ask('Show the top five customers by transaction value'));
 

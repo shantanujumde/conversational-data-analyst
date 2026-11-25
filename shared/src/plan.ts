@@ -7,6 +7,11 @@ export type DatasetId = z.infer<typeof DatasetIdSchema>;
 
 const IsoDate = z.iso.date(); // YYYY-MM-DD
 
+/** Most rows a plan may ask for. buildQuery also caps LIMIT at this. */
+export const PLAN_LIMIT_MAX = 100;
+/** Longest answer title. */
+export const PLAN_TITLE_MAX = 80;
+
 export const QueryPlanFilterSchema = z.object({
   dimension: z.string(),
   values: z.array(z.string()).min(1).max(20),
@@ -21,8 +26,8 @@ export const QueryPlanQuerySchema = z.object({
   filters: z.array(QueryPlanFilterSchema).max(5),
   dateRange: z.object({ from: IsoDate, to: IsoDate }).optional(),
   sort: z.object({ by: z.string(), direction: z.enum(['asc', 'desc']) }).optional(),
-  limit: z.int().min(1).max(100).optional(),
-  title: z.string().min(1).max(80),
+  limit: z.int().min(1).max(PLAN_LIMIT_MAX).optional(),
+  title: z.string().min(1).max(PLAN_TITLE_MAX),
 });
 
 export const QueryPlanUnsupportedSchema = z.object({

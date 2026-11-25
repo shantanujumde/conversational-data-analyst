@@ -51,7 +51,7 @@ export function createAiPlanner(
           abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
           maxRetries: 0, // retries are handled below, so the timeout covers each attempt
         });
-        return toQueryPlanInput(result.output);
+        return toQueryPlanInput(result.output, question);
       };
 
       let output: unknown;

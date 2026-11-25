@@ -79,6 +79,11 @@ export function validatePlan(plan: QueryPlanQuery): ValidatedPlan {
   const selected = [...plan.metrics, ...plan.groupBy];
   if (new Set(selected).size !== selected.length) reject('a metric or dimension is repeated');
 
+  // Two filters on one dimension AND together (status IN (A) AND status IN (B)) and silently
+  // return nothing; the model should put all values in one filter.
+  const filtered = plan.filters.map((filter) => filter.dimension);
+  if (new Set(filtered).size !== filtered.length) reject('a filter dimension is repeated');
+
   const filters = plan.filters.map((filter) => {
     const dimension = getDimension(dataset, filter.dimension);
     if (!dimension) reject(`filter dimension "${filter.dimension}" is not in ${plan.dataset}`);

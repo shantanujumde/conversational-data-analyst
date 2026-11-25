@@ -1,4 +1,4 @@
-import type { QueryPlan } from '@cda/shared';
+import { type QueryPlan, QueryPlanSchema } from '@cda/shared';
 import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
@@ -256,6 +256,38 @@ describe('flat AI plan → strict plan', () => {
       sort: { by: 'application_count', direction: 'desc' },
       title: 'Applications',
     });
+  });
+
+  it('caps a limit above 100 and cuts a fraction to a whole number', () => {
+    const flat = { ...EMPTY_FLAT, kind: 'query', dataset: 'applications', title: 'T' } as const;
+    expect(toQueryPlanInput({ ...flat, limit: 150 })).toMatchObject({ limit: 100 });
+    expect(toQueryPlanInput({ ...flat, limit: 5.7 })).toMatchObject({ limit: 5 });
+    expect(toQueryPlanInput({ ...flat, limit: 0 })).not.toHaveProperty('limit');
+  });
+
+  it('uses the question when the title is missing, and shortens a long title', () => {
+    const flat = { ...EMPTY_FLAT, kind: 'query', dataset: 'applications' } as const;
+    expect(toQueryPlanInput({ ...flat, title: null }, 'How many applications?')).toMatchObject({
+      title: 'How many applications?',
+    });
+    const long = toQueryPlanInput({ ...flat, title: 'x'.repeat(120) }) as { title: string };
+    expect(long.title).toHaveLength(80);
+    expect(long.title.endsWith('…')).toBe(true);
+  });
+
+  it('turns an over-long limit and title into a plan QueryPlanSchema accepts', () => {
+    const rebuilt = toQueryPlanInput(
+      {
+        ...EMPTY_FLAT,
+        kind: 'query',
+        dataset: 'applications',
+        metrics: ['application_count'],
+        limit: 150,
+        title: 'y'.repeat(90),
+      },
+      'q',
+    );
+    expect(QueryPlanSchema.safeParse(rebuilt).success).toBe(true);
   });
 
   it('keeps only the reason for an unsupported plan', () => {

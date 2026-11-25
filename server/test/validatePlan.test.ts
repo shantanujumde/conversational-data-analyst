@@ -86,6 +86,15 @@ describe('validatePlan', () => {
     ['an injection attempt in groupBy', { groupBy: ['segment; DROP TABLE customers'] }],
     ['sort by something not selected', { sort: { by: 'approval_rate', direction: 'desc' } }],
     ['a repeated metric', { metrics: ['rejection_rate', 'rejection_rate'] }],
+    [
+      'two filters on the same dimension',
+      {
+        filters: [
+          { dimension: 'status', values: ['APPROVED'] },
+          { dimension: 'status', values: ['REJECTED'] },
+        ],
+      },
+    ],
     ['an impossible date', { dateRange: { from: '2026-02-30', to: '2026-03-31' } }],
     ['from after to', { dateRange: { from: '2026-06-01', to: '2026-01-01' } }],
     ['a zero limit', { limit: 0 }],
