@@ -1,181 +1,177 @@
 # Conversational Data Analyst
 
-Ask a business question about a bank in plain English and get an answer worked out from real database rows. The answer comes as a sentence, a single figure, a table, a bar chart or a line chart. The data is synthetic sample banking data (branches, customers, onboarding applications and transactions, in INR).
+Ask a question about a bank's data in plain English. Get back a sentence plus a number, table, bar chart, or line chart, worked out by querying the database, not guessed by the AI. The data is made-up sample banking data in INR: branches, customers, onboarding applications, and transactions.
 
 ![A bar chart answering "Which branches have the highest rejection rate?"](docs/screenshots/03-bar-chart.jpg)
 
-The AI never writes SQL. It picks a dataset, measures and breakdowns from a fixed list; the server checks that choice and builds the query itself. Design details are in [docs/SPEC.md](docs/SPEC.md), and the API contract is in [docs/API.md](docs/API.md).
+The AI never writes SQL. It only picks from a fixed list of datasets and measures, and the server writes the query. Full design: [docs/SPEC.md](docs/SPEC.md). API contract: [docs/API.md](docs/API.md).
 
-## Setup
+## Quick start
 
-You need Node 26 (see `.nvmrc`) and a Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+You need Node 26 (see `.nvmrc`) and a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
 
 ```sh
 npm install
 cp .env.example .env     # then set GEMINI_API_KEY in .env
 npm run db:seed          # creates server/data/bank.db
-npm run dev              # API on http://localhost:3001, app on http://localhost:5173
+npm run dev              # API on :3001, app on http://localhost:5173
 ```
 
-Open http://localhost:5173.
+| Setting          | Default             | What it does                                                     |
+| ---------------- | ------------------- | ---------------------------------------------------------------- |
+| `GEMINI_API_KEY` | none                | Your Gemini key. Stays on the server.                            |
+| `AI_PROVIDER`    | `google`            | `mock` answers the example questions with no key and no network. |
+| `AI_MODEL`       | `gemini-4-hydrogen` | Any Gemini model id.                                             |
 
-Settings in `.env`:
+The other settings (port, database path, allowed origin) are in `.env.example`.
 
-| Variable         | Default                 | What it does                                                          |
-| ---------------- | ----------------------- | --------------------------------------------------------------------- |
-| `GEMINI_API_KEY` | none                    | Required when `AI_PROVIDER=google`. Stays on the server.              |
-| `AI_PROVIDER`    | `google`                | `google` for Gemini, `mock` for keyword rules with no key or network. |
-| `AI_MODEL`       | `gemini-4-hydrogen`     | Any Gemini model id. See the note below.                              |
-| `DATABASE_PATH`  | `./data/bank.db`        | SQLite file, relative to `server/`.                                   |
-| `PORT`           | `3001`                  | API port.                                                             |
-| `CLIENT_ORIGIN`  | `http://localhost:5173` | The only origin CORS allows.                                          |
+**If questions fail with "AI service" errors**, change the model. During the build, `gemini-4-hydrogen` returned "high demand" (503) on almost every call, and the free tier allows only about 20 requests a day per model. Setting `AI_MODEL=gemini-3.5-flash` worked.
 
-**Model note.** During the build, `gemini-4-hydrogen` returned "high demand" (503) on every call. The local `.env` used `gemini-3.6-flash` and then `gemini-3.5-flash`; both pick correct plans. On the free tier each model allows about 20 requests a day, so set `AI_MODEL` to another flash model if you hit the daily limit. To try the app without a key, set `AI_PROVIDER=mock`. It answers the example questions only.
+Other commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`. CI runs all of them, plus a format check, on every push.
 
-## Scripts
+## How to use it
 
-| Command                | What it does                                   |
-| ---------------------- | ---------------------------------------------- |
-| `npm run dev`          | API and app together                           |
-| `npm run db:seed`      | Rebuild the sample database (same data always) |
-| `npm test`             | Vitest for server and client (121 tests)       |
-| `npm run typecheck`    | `tsc --noEmit` in every workspace              |
-| `npm run lint`         | ESLint                                         |
-| `npm run format:check` | Prettier, check only                           |
-| `npm run build`        | Production build of the app                    |
+### Step 1: pick an example or type your own
 
-CI (`.github/workflows/ci.yml`) runs the format check, lint, typecheck, tests and build on every push and pull request.
-
-## How to use the app
-
-### 1. Pick an example or type a question
-
-The first page lists questions the app can answer. Click one, or type your own in the box at the bottom and press **Enter** (Shift+Enter adds a new line). Questions can be up to 500 characters.
+Press Enter to send.
 
 ![The first page with example questions](docs/screenshots/01-empty-state.jpg)
 
-### 2. Watch the answer print
+### Step 2: watch the entry fill in
 
-Each question becomes a numbered, dated entry, like a line in a bank passbook. A thin bar moves while the answer is on its way.
+Each question becomes a numbered, dated entry, like a line in a bank passbook. A thin bar moves while the server works.
 
 ![An entry while its answer is printing](docs/screenshots/02-printing.jpg)
 
-### 3. Read the answer
+### Step 3: see how the answer was found
 
-The app picks the visual from the shape of the result. A single figure shows as a large number, one breakdown as a bar chart, a breakdown by month as a line chart, and anything else as a table. Every answer starts with one plain sentence.
+Open **How I got this** to see the dataset and the exact SQL that ran.
 
-| Single figure                                 | Line chart by month                               |
+![The How I got this panel showing the SQL](docs/screenshots/04-how-i-got-this.jpg)
+
+## What answers look like
+
+The shape of the result picks the visual: one number shows as a big figure, a breakdown by month as a line chart, one other breakdown as a bar chart, and anything else as a table. The icons on each entry switch between chart and table.
+
+| Bar chart (amounts in INR)                                  | Line chart by month                               |
+| ----------------------------------------------------------- | ------------------------------------------------- |
+| ![Top customers](docs/screenshots/11-top-customers-inr.jpg) | ![Line chart](docs/screenshots/09-line-chart.jpg) |
+
+| Single figure                                 | Table view                                        |
 | --------------------------------------------- | ------------------------------------------------- |
-| ![KPI card](docs/screenshots/10-kpi-card.jpg) | ![Line chart](docs/screenshots/09-line-chart.jpg) |
+| ![KPI card](docs/screenshots/10-kpi-card.jpg) | ![Table view](docs/screenshots/05-table-view.jpg) |
 
-| Comparing two segments                                     | Amounts in INR                                                   |
-| ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| ![Retail vs SME](docs/screenshots/13-compare-segments.jpg) | ![Top five customers](docs/screenshots/11-top-customers-inr.jpg) |
+The copy icon copies the sentence, the data as CSV, or the chart as a PNG image.
 
-### 4. Switch to the table, or see how the answer was found
+![The copy menu](docs/screenshots/08-copy-menu-chart.jpg)
 
-The icons on the right of each entry switch between chart and table. **How I got this** opens the dataset and the exact SQL the server ran.
+## When it can't answer
 
-| Table view                                        | How I got this                                       |
-| ------------------------------------------------- | ---------------------------------------------------- |
-| ![Table view](docs/screenshots/05-table-view.jpg) | ![SQL panel](docs/screenshots/04-how-i-got-this.jpg) |
-
-### 5. Copy the answer
-
-The copy icon offers the answer sentence, the data as CSV, or the chart as a PNG image. If the browser blocks copying an image, the PNG downloads instead.
-
-| Copy menu                                             | Confirmation                                          |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| ![Copy menu](docs/screenshots/08-copy-menu-chart.jpg) | ![Copied toast](docs/screenshots/07-copied-toast.jpg) |
-
-### 6. When the app can't answer
-
-A question outside the bank data gets a red **NOT IN LEDGER** stamp and three questions you can click instead. A technical failure gets **COULD NOT PRINT** with a **Try again** button that re-asks in the same entry. The `Ref:` line is the request id, which also appears in the server log.
+A question outside the bank data gets a **NOT IN LEDGER** stamp and three questions to try instead. A technical failure gets **COULD NOT PRINT** and a **Try again** button. The `Ref:` code matches a line in the server log.
 
 | Off-topic question                                        | AI or server failure                                             |
 | --------------------------------------------------------- | ---------------------------------------------------------------- |
 | ![Refusal](docs/screenshots/14-refusal-not-in-ledger.jpg) | ![Error with Try again](docs/screenshots/12-error-try-again.jpg) |
 
-On a phone-width screen the date moves above the question and charts use the full width.
+On a phone the layout stacks and charts use the full width.
 
-<img src="docs/screenshots/15-phone-width.jpg" alt="The app at phone width" width="320">
+<img src="docs/screenshots/15-phone-width.jpg" alt="The app at phone width" width="280">
 
 ## Architecture
 
-```
-client (React)                         server (Express)
-  TellerSlip → useChat                   POST /api/v1/ask
-  AnswerView: KPI | table | chart          1. validate body (Zod)
-  CopyMenu: text | CSV | PNG               2. AI planner → query plan (JSON, never SQL)
-  api/client.ts (typed, never throws) ──►  3. validatePlan: plan vs catalog allow-list
-                                           4. buildQuery: catalog SQL pieces + ? params, LIMIT ≤ 100
-                                           5. runQuery: read-only SQLite connection
-                                           6. chooseVisualization + summarize (no AI)
-                    ◄── { ok, data } | { ok: false, error }
-shared/  Zod schemas both sides import: query plan, ask request and result, errors
+```mermaid
+flowchart LR
+  UI[React app] -->|question| A[Check the question]
+  A --> B[AI picks a query plan]
+  B --> C[Server checks the plan]
+  C --> D[Server builds the SQL]
+  D --> E[Run on read-only database]
+  E --> F[Pick chart and write sentence]
+  F -->|answer| UI
 ```
 
-- **Workspaces.** `shared/`, `server/` and `client/` are npm workspaces. Both sides import the same Zod schemas from `shared/`, so request and response types can't drift apart.
-- **Catalog.** `server/src/catalog/catalog.ts` is a hand-written allow-list: three datasets (`applications`, `transactions`, `customers`), their measures and breakdowns, and the SQL piece for each. The AI only returns ids from this list.
-- **Safety.** A plan passes three checks: its JSON shape (Zod), the catalog check (every id exists in the chosen dataset, filter values are allowed values, dates are valid), and the build (SQL made only from catalog pieces, values passed as `?` parameters, `LIMIT` capped at 100). Queries run on a read-only connection. A prompt-injection attempt can at worst produce a plan that fails validation.
-- **No AI in the answer text.** The sentence and the choice of chart come from templates and the result rows, so the AI can't invent a number.
-- **Errors.** The server has one error handler that sends `{ ok: false, error: { code, message, requestId } }`. Stack traces, SQL errors and AI provider messages are logged, never sent. The client turns every failure, including network errors and timeouts, into a typed result.
-- **Security basics.** `helmet`, CORS limited to `CLIENT_ORIGIN`, 10 KB body limit, 20 questions per minute per IP on `/ask`, and the API key only on the server.
+The React app (`client/`) sends the question to the Express server (`server/`). Both import the same request, reply and query-plan types from `shared/`, so they can't drift apart. The server then:
 
-Data model: `server/src/db/schema.sql`. Seed: `server/src/db/seed.ts` (8 branches, 200 customers, 1,500 applications over the last 12 months, 5,000 transactions, generated from a fixed seed).
+1. Checks the question is 1–500 characters of text.
+2. Asks the AI for a **query plan**: a small piece of JSON naming a dataset, a measure (such as "rejection rate") and a breakdown (such as "branch"), all picked from a fixed list.
+3. Checks the plan's shape and every name in it against that list, called the **catalog** (`server/src/catalog/catalog.ts`). The catalog is an allow-list: unknown names, filter values, or dates are rejected.
+4. Builds the SQL from pieces stored in the catalog. User values go in as `?` placeholders, never pasted into the SQL text.
+5. Runs it on a **read-only** database connection, so the query can't change data.
+6. Picks the chart from the shape of the result and writes the sentence from a template, with no AI.
+
+## Tech choices and why
+
+| Part                  | Choice                                        | Why                                                                                                         |
+| --------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| How AI meets the DB   | AI returns a query plan, never SQL            | A plan can be checked against a list. A prompt-injection attack at worst gives a plan that fails the check. |
+| Safety list           | Hand-written catalog of datasets and measures | The AI picks names; the server owns every piece of SQL.                                                     |
+| Answer text and chart | Templates, no AI                              | The AI can't invent a number.                                                                               |
+| Database              | SQLite with a seed script                     | One file, nothing to install, set up with one command.                                                      |
+| AI                    | Vercel AI SDK with Gemini                     | Change model with one setting. A built-in mock lets tests run with no key.                                  |
+| Checks and types      | Zod schemas in `shared/`                      | One schema gives both the runtime check and the TypeScript type.                                            |
+| Frontend / backend    | React 19 + Vite, Express                      | Little setup, and Express routes are easy to test end to end with `supertest`.                              |
+| Charts and UI parts   | Recharts, shadcn/ui, Tailwind                 | Charts are SVG, which copy-as-PNG needs. UI parts are accessible and easy to restyle.                       |
+| Look                  | Bank passbook                                 | Branch staff already read passbooks: date on the left, details, then the figure.                            |
+| AI timeout            | 30 s, one retry                               | Free-tier Gemini often takes 15–20 s or says it's busy.                                                     |
+
+Considered and rejected:
+
+- **AI writes SQL, then a checker reviews it.** More flexible, but much harder to prove safe or test.
+- **PostgreSQL in Docker.** Closer to production, but setup costs too much time in a 60-minute build.
+- **A second AI call to write the answer sentence.** It could make up numbers.
+
+## Errors and security
+
+- Every error goes out in one shape, `{ ok: false, error: { code, message, requestId } }`. Stack traces, SQL errors, and AI messages go to the server log only.
+- `helmet` sets safe browser headers.
+- CORS allows only the app's own address.
+- Requests are capped at 10 KB, and each IP can ask 20 questions a minute.
+- Results are capped at 100 rows.
 
 ## Assumptions
 
-- Each question stands alone; the app doesn't use earlier answers as context.
-- All data is synthetic. No real bank, customer or logo appears.
+- Each question stands alone; earlier answers aren't used as context.
+- All data is made up. No real bank, customer, or logo appears.
 - All amounts are in INR.
-- Rejection rate = rejected ÷ all applications, with pending ones included.
-- "Last 12 months" is counted back from today, so the seeded dates move with the current date.
+- Rejection rate = rejected ÷ all applications, pending ones included.
+- "Last 12 months" counts back from today, so the seeded dates move with the current date.
 
 ## Completed functionality
 
 Checked against the brief in [docs/problem-statement.md](docs/problem-statement.md):
 
 - [x] Chat-style interface with example questions
-- [x] Accepts a natural-language question (1–500 characters)
-- [x] Picks the relevant dataset (the AI's query plan)
-- [x] Builds the query (on the server, from the checked plan)
-- [x] Runs it against a relational database (SQLite)
-- [x] Shows the answer as text, KPI card, table, bar chart or line chart
-- [x] Copies the answer text, the data (CSV) or the chart (PNG)
-- [x] Handles off-topic questions, bad input and technical errors with clear messages
-- [x] Sample banking data with three distinct datasets
-- [x] AI-chosen plans are validated against an allow-list; the AI never writes SQL
-- [x] Automated tests: 121 across 12 files, including SQL building, plan validation with an injection attempt, the `/ask` endpoint end to end with a mock planner, the API client's error handling, and AI retry behaviour
+- [x] Natural-language question (1–500 characters)
+- [x] Picks the dataset (AI query plan)
+- [x] Builds the query on the server from the checked plan
+- [x] Runs it on a relational database (SQLite)
+- [x] Answer as text, KPI card, table, bar chart, or line chart
+- [x] Copy text, CSV, or chart PNG
+- [x] Clear messages for off-topic questions, bad input, and errors
+- [x] Sample data with three datasets: customers and branches (200 and 8), 1,500 onboarding applications, 5,000 transactions
+- [x] AI plans checked against the catalog; the AI never writes SQL
+- [x] 121 automated tests, including SQL building, an injection attempt, the `/ask` endpoint end to end, and AI retries
 
 ## Known limitations
 
-- Only questions the catalog covers can be answered. Anything else is refused, not guessed.
-- No follow-up questions, login or saved history; entries live in the browser tab only.
-- SQLite and an in-memory rate limiter suit one server only.
-- On the free Gemini tier a call can take 15–20 s or return "busy". The server waits 30 s and retries once, so the slowest answer can take about a minute. The free tier also caps each model at about 20 requests a day.
-- The JavaScript bundle is 965 kB (287 kB gzipped), mostly the charting library.
+- Only questions the catalog covers get answers. Others are refused, not guessed.
+- No follow-up questions, login, or saved history; entries live in the browser tab only.
+- SQLite and an in-memory rate limit suit one server only.
+- Free-tier Gemini can be slow; with the retry, the worst answer takes about a minute.
+- The JavaScript bundle is 965 kB (287 kB gzipped), mostly the chart library.
 
 ## Productionising
 
-- PostgreSQL with a read-only database role and a statement timeout.
-- Login and per-user rate limits; a shared rate-limit store such as Redis.
-- Move the catalog into configuration or a semantic layer so analysts can add measures without a deploy.
-- Cache plans for repeated questions; use a paid Gemini tier, or a second provider behind the same AI SDK interface, for steady latency.
-- Ship the structured logs (already JSON, with request ids) to a log store, with alerts on AI latency, cost and error rate.
-- An evaluation set of questions and expected plans, run in CI, to catch prompt or model regressions.
-- Split the chart library into its own chunk; build `shared/` with TypeScript project references; run in Docker.
+- PostgreSQL with a read-only role and a query time limit.
+- Login, per-user rate limits, and a shared rate-limit store such as Redis.
+- Catalog in config, so analysts add measures without a deploy.
+- Cache plans for repeated questions; paid Gemini tier or a second provider for steady speed.
+- Send the JSON logs to a log store, with alerts on AI speed, cost, and errors.
+- A test set of questions and expected plans, run in CI, to catch prompt or model changes.
+- Split the chart library into its own chunk, build `shared/` with TypeScript project references, and run in Docker.
 
-## AI tools used
+## AI tools used and my decisions
 
-Built with **Claude Code** (Anthropic's CLI agent). The lead session wrote the API contract in `shared/` and `docs/API.md`. Two Claude Code sub-agents then built the backend and the frontend in parallel against that contract. The lead session merged their work, ran the end-to-end checks in Chrome, fixed what they turned up (readable months in sentences, short INR chart labels, Gemini timeout and retry), and wrote this README.
+Built with **Claude Code**. The lead session wrote the API contract in `shared/` and `docs/API.md`, then two sub-agents built the backend and frontend in parallel against it. The lead session merged their work, tested it end to end in Chrome, fixed what turned up, and wrote this README.
 
-Decisions made by the author, recorded in [docs/SPEC.md](docs/SPEC.md):
-
-- The AI returns a query plan, not SQL, checked against a hand-written catalog allow-list.
-- The choice of visual and the answer sentence are deterministic, so numbers can't be invented.
-- SQLite with a seed script, to keep setup to one command.
-- Vercel AI SDK, so the model or provider changes with one setting; Gemini as the provider.
-- npm workspaces with shared Zod schemas for both sides.
-- The "bank passbook" visual design.
-- During the build: the `GEMINI_API_KEY` name, falling back to a flash model while Hydrogen was overloaded, and a 30 s timeout with one retry.
+I made every choice in [Tech choices and why](#tech-choices-and-why) myself. All but the AI timeout were written down in [docs/SPEC.md](docs/SPEC.md) (§1 and §14) before the build. During the build I chose the 30 s timeout with one retry, the `GEMINI_API_KEY` name, and the switch to a flash model when Hydrogen was overloaded.
