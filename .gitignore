@@ -7,3 +7,5 @@ coverage/
 server/data/
 *.log
 .DS_Store
+.vitest/
+.claude/worktrees/
