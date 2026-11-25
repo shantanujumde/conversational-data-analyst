@@ -15,7 +15,7 @@ This spec covers only what the exercise asks for. Anything not listed under "In 
 | Frontend               | React 19 + Vite + TypeScript                                                                                                        | Fast dev server, zero config TS.                                                                                                                                           |
 | Backend                | Node.js + Express + TypeScript (run with `tsx`)                                                                                     | Small, well known, easy to test with `supertest`.                                                                                                                          |
 | Database               | SQLite via `better-sqlite3`                                                                                                         | One file, no install, created by a seed script. Query path opens it **read-only**.                                                                                         |
-| UI kit                 | shadcn/ui on Tailwind CSS v4, re-themed to the passbook look in §13                                                                 | Accessible parts (menu, tooltip, table, toast) copied into our code as source files, so we can restyle them fully instead of shipping the default zinc look.               |
+| UI kit                 | shadcn/ui on Tailwind CSS v4, re-themed to the passbook look in §14                                                                 | Accessible parts (menu, tooltip, table, toast) copied into our code as source files, so we can restyle them fully instead of shipping the default zinc look.               |
 | Charts                 | Recharts, through shadcn's `Chart` wrapper                                                                                          | Built for React (charts are components), bar + line out of the box, renders SVG (needed for "copy chart as image"). The wrapper reads chart colours from our theme tokens. |
 | AI layer               | Vercel AI SDK v7 (`ai`) + `@ai-sdk/google`, model `gemini-4-hydrogen`, plus a built-in `mock` provider                              | Switch model with one env var (`AI_MODEL`); other providers need only a new `@ai-sdk/*` package. Mock keeps tests running with no API key or network.                      |
 | How AI talks to the DB | AI returns a **query plan** (JSON), never SQL. Server validates the plan against an allow-list and builds parameterised SQL itself. | Meets "no unrestricted AI SQL". Prompt injection can at worst produce a plan that fails validation.                                                                        |
@@ -209,12 +209,18 @@ Every answer also carries the rows, so the UI can always switch to the table vie
 
 ## 9. API
 
-All responses use one envelope from `shared/src/api.ts`:
+All responses use one envelope from `shared/src/api.ts`. `ErrorCode` and `ErrorBody` live in `shared/src/errors.ts` and are shown here for reference:
 
 ```ts
-type ApiResponse<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { code: ErrorCode; message: string; suggestions?: string[] } };
+type ApiResponse<T> = { ok: true; data: T } | { ok: false; error: ErrorBody };
+
+interface ErrorBody {
+  code: ErrorCode;
+  message: string; // safe to show the user, always written by us
+  requestId: string; // same value as the X-Request-Id header; quote it when reporting a problem
+  suggestions?: string[]; // only for UNSUPPORTED_QUESTION
+  retryAfterSeconds?: number; // only for RATE_LIMITED
+}
 
 type ErrorCode =
   | 'VALIDATION_ERROR'
@@ -262,11 +268,128 @@ Error mapping:
 | Wrong HTTP method on a known route (sends an `Allow` header)          | 405  | `METHOD_NOT_ALLOWED`                              |
 | Anything else                                                         | 500  | `INTERNAL_ERROR`                                  |
 
-The server logs the full error; the client only gets `code` and a friendly `message`. No stack traces leave the server.
+The server logs the full error; the client only gets `code`, a friendly `message` and the `requestId`, plus `suggestions` or `retryAfterSeconds` when set. No stack traces leave the server. How each layer raises and shows these errors is in §10.
 
-The client adds two codes of its own in `client/src/api/client.ts`, never sent by the server: `NETWORK_ERROR` (fetch failed, or a proxy answered 502/503/504 without our JSON body) and `INVALID_RESPONSE` (body doesn't match the shared Zod schema).
+## 10. Error handling
 
-## 10. Security basics
+One rule on each side: **the server has exactly one place that writes an error response (`errorHandler.ts`), and the client has exactly one place that turns any failure into a typed result (`api/client.ts`).** Everything else throws (server) or returns a result (client).
+
+### 10.1 Error codes and what the user sees
+
+The server codes live in `shared/src/errors.ts` as `ERROR_CODES = [...] as const`, so both sides share one list. The client adds three codes of its own, which never come from the server.
+
+| Code                   | From   | HTTP      | Message shown (exact text)                                                                                                                                          | Stamp             | Try again?                     |
+| ---------------------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------ |
+| `VALIDATION_ERROR`     | server | 400 / 413 | Empty: "Please type a question." Too long: "Questions can be up to 500 characters." Bad JSON: "Request body is not valid JSON." Over 10 KB: "Request is too large." | `COULD NOT PRINT` | No, fix the question           |
+| `UNSUPPORTED_QUESTION` | server | 422       | "I can only answer questions about branches, customers, onboarding applications and transactions." + up to 3 suggestions                                            | `NOT IN LEDGER`   | No; suggestions are clickable  |
+| `AI_ERROR`             | server | 502       | "The AI service ran into a problem. Please try again."                                                                                                              | `COULD NOT PRINT` | Yes                            |
+| `QUERY_ERROR`          | server | 500       | "Something went wrong while reading the data. Please try again."                                                                                                    | `COULD NOT PRINT` | Yes                            |
+| `RATE_LIMITED`         | server | 429       | "Too many questions at once. Try again in {n} seconds."                                                                                                             | `COULD NOT PRINT` | Yes, button enabled after {n}s |
+| `NOT_FOUND`            | server | 404       | "That address doesn't exist." (only API callers see this, not the UI)                                                                                               | none              | n/a                            |
+| `METHOD_NOT_ALLOWED`   | server | 405       | "That address doesn't accept this method." (only API callers see this)                                                                                              | none              | n/a                            |
+| `INTERNAL_ERROR`       | server | 500       | "Something went wrong on our side. Please try again."                                                                                                               | `COULD NOT PRINT` | Yes                            |
+| `NETWORK_ERROR`        | client | none      | "Couldn't reach the server. Check your connection and try again."                                                                                                   | `COULD NOT PRINT` | Yes                            |
+| `TIMEOUT`              | client | none      | "This is taking too long. Please try again."                                                                                                                        | `COULD NOT PRINT` | Yes                            |
+| `INVALID_RESPONSE`     | client | none      | "The server sent an answer we couldn't read. Please try again."                                                                                                     | `COULD NOT PRINT` | Yes                            |
+
+Under each stamp, a small Courier Prime line shows `Ref: {requestId}` when there is one.
+
+### 10.2 Backend
+
+**`AppError`** (`server/src/errors.ts`):
+
+```ts
+class AppError extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    message?: string, // overrides the default user message (used for VALIDATION_ERROR)
+    readonly extra: { suggestions?: string[]; retryAfterSeconds?: number; status?: number } = {}, // status replaces STATUS[code]; used only for 413
+    options?: { cause?: unknown }, // the original error, logged but never sent
+  ) {
+    super(message ?? DEFAULT_MESSAGE[code], options);
+  }
+}
+const STATUS: Record<ErrorCode, number> = { VALIDATION_ERROR: 400 /* … */ };
+const DEFAULT_MESSAGE: Record<ErrorCode, string> = {/* texts from §10.1 */};
+function toAppError(err: unknown): AppError;
+// - AppError: returned as is
+// - body-parser errors: err.type 'entity.parse.failed' → VALIDATION_ERROR (400), 'entity.too.large' → VALIDATION_ERROR with status 413
+// - anything else: INTERNAL_ERROR, keeping the original as cause
+```
+
+`Record<ErrorCode, …>` means adding a code without a status and message fails `tsc`.
+
+**Who raises what:**
+
+| Layer                    | Failure                                                                         | Raises                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `express.json()`         | Bad JSON / body over 10 KB                                                      | Its own error; `toAppError` turns it into `VALIDATION_ERROR` (400 / 413)                                                                                                              |
+| `routes/ask.ts`          | Body fails `AskRequestSchema`                                                   | `VALIDATION_ERROR` with the first Zod issue's message. The schema sets them: `z.string().trim().min(1, 'Please type a question.').max(500, 'Questions can be up to 500 characters.')` |
+| `ai/planner.ts`          | Timeout (15 s), network or provider error, output that doesn't match the schema | `AI_ERROR`, original error as `cause`                                                                                                                                                 |
+| `ai/planner.ts`          | AI returns `{ kind: 'unsupported' }`                                            | `UNSUPPORTED_QUESTION` + 3 suggestions from `catalog/examples.ts`                                                                                                                     |
+| `query/validatePlan.ts`  | Plan breaks a catalog rule                                                      | `UNSUPPORTED_QUESTION` + 3 suggestions (the broken rule is logged, not shown)                                                                                                         |
+| `query/runQuery.ts`      | SQLite throws                                                                   | `QUERY_ERROR`, original as `cause`                                                                                                                                                    |
+| `middleware/security.ts` | Rate limit hit                                                                  | The limiter's `handler` calls `next(new AppError('RATE_LIMITED', undefined, { retryAfterSeconds }))`, so it goes through the error handler; `Retry-After` header set too              |
+| each router              | Known path, wrong method                                                        | Every route ends with `.all(methodNotAllowed)` → `METHOD_NOT_ALLOWED` + `Allow` header                                                                                                |
+| `middleware/notFound.ts` | No route matched                                                                | `NOT_FOUND`                                                                                                                                                                           |
+| anywhere                 | Anything unexpected                                                             | becomes `INTERNAL_ERROR` in the error handler                                                                                                                                         |
+
+An empty result is **not** an error: it returns `ok: true` with the text "No data matched this question."
+
+**Flow:**
+
+1. Express 5 sends errors from `async` route handlers to the error handler on its own, so routes need no `try/catch`.
+2. `errorHandler.ts` calls `toAppError(err)`, logs once, then sends `{ ok: false, error: { code, message, requestId, suggestions?, retryAfterSeconds? } }` with `extra.status ?? STATUS[code]`.
+3. **Logging:** `pino-http` gives each request an id (reused from an incoming `X-Request-Id` if present, else a new UUID) and sends it back in the `X-Request-Id` header. 4xx errors log at `warn` without a stack; 5xx log at `error` with the stack and `cause`. The question text is logged; API keys and full rows never are.
+4. **Never sent to the client:** stack traces, `cause`, SQL error text, AI provider messages, file paths.
+5. **Startup:** if `config.ts` validation fails, print which env variable is wrong and exit with code 1, before listening.
+6. **Process level** (`index.ts`): on `unhandledRejection` or `uncaughtException`, log at `fatal`, close the server, and exit with code 1.
+
+### 10.3 Frontend
+
+**API client** (`client/src/api/client.ts`) never throws. It always returns:
+
+```ts
+type ClientErrorCode = ErrorCode | 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
+type ApiResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      error: {
+        code: ClientErrorCode;
+        message: string;
+        requestId?: string;
+        suggestions?: string[];
+        retryAfterSeconds?: number;
+      };
+    };
+```
+
+Steps inside `ask(question)`:
+
+1. `fetch` with `signal: AbortSignal.timeout(20_000)` (a little longer than the server's 15 s AI timeout).
+2. Timeout → `TIMEOUT`. Any other `fetch` rejection → `NETWORK_ERROR`.
+3. Read the body as text and try `JSON.parse`. Not JSON and status ≥ 500 → `NETWORK_ERROR` (the dev proxy or another server answered, not our API); not JSON otherwise → `INVALID_RESPONSE`.
+4. Validate with `ApiResponseSchema(AskResultSchema)` from `shared`. No match → `INVALID_RESPONSE`.
+5. Return the parsed result as is (`ok: true` or the server's `ok: false`).
+
+**Showing errors** (`lib/errorView.ts`): one `Record<ClientErrorCode, { stamp: 'NOT IN LEDGER' | 'COULD NOT PRINT'; retry: boolean; fallbackMessage: string }>`. `Entry.tsx` uses it to render the stamp, the message, suggestions and the Try again button. Because it's a `Record`, a new error code that isn't handled fails `tsc`. `client.ts` fills `message` from `errorView[code].fallbackMessage` for the three client codes; the UI always shows `error.message`.
+
+**Where errors are caught in the UI:**
+
+| Failure                                 | Handling                                                                                                                                                                                                       |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empty or too-long question              | Prevented before sending: the Print answer button is disabled for blank input; the textarea stops at 500 characters.                                                                                           |
+| Any `ask()` failure                     | The entry stays in the list with its stamp and message (§14 motion), so the question isn't lost. Try again re-sends the same question into the same entry.                                                     |
+| `RATE_LIMITED`                          | Try again shows a countdown and is enabled when it reaches zero.                                                                                                                                               |
+| Catalog request fails                   | Fall back silently to the four example questions bundled in the client. No error shown.                                                                                                                        |
+| A chart or table throws while rendering | `EntryErrorBoundary` around each entry shows "This answer couldn't be displayed." If the chart failed, it adds a Show table button; if the table failed, the message stands alone. Other entries keep working. |
+| Anything else throws while rendering    | `AppErrorBoundary` in `main.tsx` shows a plain page: "Something went wrong. Reload the page." with a Reload button.                                                                                            |
+| Clipboard blocked or unsupported        | Toast "Couldn't copy. Your browser blocked clipboard access."; for the chart, download the PNG instead.                                                                                                        |
+
+Errors are logged with `console.error` in development only; production builds don't log to the console.
+
+## 11. Security basics
 
 - Read-only SQLite connection for queries; only the seed script opens it for writing.
 - No AI-written SQL; allow-list + parameters + forced `LIMIT`.
@@ -275,48 +398,115 @@ The client adds two codes of its own in `client/src/api/client.ts`, never sent b
 - API keys only in server `.env`; never sent to the client. `.env` in `.gitignore`.
 - Generated SQL is shown to the user for transparency; it contains no secrets.
 
-## 11. Backend layout
+## 12. Directory structure
+
+Rules that keep the code easy to follow:
+
+- **Dependencies point one way:** `client` → `shared` ← `server`. The client never imports from `server`, and the server never imports from `client`.
+- **Routes stay thin.** A route parses input, calls one service function and sends the result. Logic lives in `services/` and the modules it calls.
+- **Each folder has one job** (named in the tree). Files are named after what they hold.
+- **Only `db/` opens SQLite connections**; `query/runQuery.ts` is the only other file that runs SQL. Only `ai/` talks to the AI SDK.
 
 ```
-server/src/
-  index.ts                       // starts the server
-  app.ts                         // builds the Express app (imported by tests)
-  config.ts                      // env vars, Zod-checked
-  routes/ask.ts, routes/catalog.ts, routes/health.ts
-  ai/provider.ts, ai/prompt.ts, ai/planner.ts, ai/mockPlanner.ts
-  catalog/catalog.ts
-  query/validatePlan.ts, query/buildQuery.ts, query/runQuery.ts
-  answer/chooseVisualization.ts, answer/summarize.ts
-  db/schema.sql, db/connection.ts, db/seed.ts
-  middleware/errorHandler.ts, middleware/security.ts   // helmet, CORS, body limit, rate limit
-  errors.ts                      // AppError with an ErrorCode
-server/test/
+conversational-data-analyst/
+├── package.json                  # workspaces (shared, server, client) + root scripts (§16); engines node >=26
+├── tsconfig.base.json            # strict, noUncheckedIndexedAccess
+├── vitest.config.ts              # test.projects: server, client
+├── eslint.config.js  .prettierrc.json  .prettierignore  .editorconfig  .nvmrc
+├── .github/workflows/ci.yml      # format:check, lint, typecheck, test, build on push + PR
+├── .env.example  .gitignore  README.md  SPEC.md  PRODUCT.md
+│
+├── shared/                       # types + Zod schemas used by both sides; no runtime deps except zod
+│   ├── package.json              # "exports": "./src/index.ts"
+│   └── src/
+│       ├── index.ts              # re-exports everything below
+│       ├── plan.ts               # QueryPlanSchema, QueryPlan
+│       ├── api.ts                # AskRequestSchema, AskResultSchema, CatalogResponse, ApiResponse<T>, ApiResponseSchema()
+│       └── errors.ts             # ERROR_CODES (as const), ErrorCode, ErrorBody
+│
+├── server/
+│   ├── package.json  tsconfig.json
+│   ├── data/                     # bank.db, created by the seed (gitignored)
+│   ├── src/
+│   │   ├── index.ts              # read config, open DB, start listening, process-level error handlers
+│   │   ├── app.ts                # createApp({ db, planner }) → Express app; no listen(), so tests can import it
+│   │   ├── config.ts             # Zod-parsed env; on bad config prints which variable is wrong and exits
+│   │   ├── logger.ts             # pino logger
+│   │   ├── errors.ts             # AppError, status + message per code, toAppError()
+│   │   ├── routes/               # HTTP in and out only: parse, call a service, respond
+│   │   │   ├── ask.ts            # POST /api/v1/ask
+│   │   │   ├── catalog.ts        # GET  /api/v1/catalog
+│   │   │   └── health.ts         # GET  /api/v1/health
+│   │   ├── services/             # one function per use case, joins the modules below
+│   │   │   └── askService.ts     # question → plan → validate → build → run → answer
+│   │   ├── middleware/           # runs on every request: security, logging, 404, errors
+│   │   │   ├── security.ts       # helmet, CORS, body-size limit, rate limit
+│   │   │   ├── requestLogger.ts  # pino-http: request id, method, path, status, duration
+│   │   │   ├── notFound.ts       # unknown route → NOT_FOUND; wrong method → METHOD_NOT_ALLOWED
+│   │   │   └── errorHandler.ts   # the only place that writes an error response
+│   │   ├── ai/                   # question → QueryPlan; the only code that calls the AI
+│   │   │   ├── provider.ts       # picks google model or mock from config
+│   │   │   ├── prompt.ts         # system prompt built from the catalog
+│   │   │   ├── planner.ts        # generateText + Output.object → QueryPlan
+│   │   │   └── mockPlanner.ts    # keyword rules, used by tests
+│   │   ├── catalog/              # the allow-list: what can be asked and its SQL pieces
+│   │   │   ├── catalog.ts        # datasets, metrics, dimensions, SQL fragments
+│   │   │   └── examples.ts       # example questions (UI empty state, refusal suggestions)
+│   │   ├── query/                # QueryPlan → checked, parameterised SQL → rows
+│   │   │   ├── validatePlan.ts   # plan vs catalog
+│   │   │   ├── buildQuery.ts     # plan → { sql, params }
+│   │   │   └── runQuery.ts       # executes on the read-only connection
+│   │   ├── answer/               # rows → visual + sentence
+│   │   │   ├── chooseVisualization.ts
+│   │   │   └── summarize.ts      # one-sentence answer from rows
+│   │   └── db/                   # schema, connections, seed data
+│   │       ├── schema.sql
+│   │       ├── connection.ts     # openReadOnly(path), openWritable(path)
+│   │       ├── random.ts         # seeded random generator
+│   │       └── seed.ts           # npm run db:seed
+│   └── test/
+│       ├── helpers/testDb.ts     # seeds a temp DB per test file
+│       ├── buildQuery.test.ts
+│       ├── validatePlan.test.ts
+│       └── ask.api.test.ts
+│
+└── client/
+    ├── package.json  tsconfig.json  vite.config.ts  components.json  index.html
+    └── src/
+        ├── main.tsx              # fonts, styles, <AppErrorBoundary>, <Toaster />
+        ├── App.tsx               # TopBand + PassbookPage
+        ├── styles.css            # Tailwind + passbook tokens (§14)
+        ├── api/                  # all HTTP calls
+        │   └── client.ts         # ask(), getCatalog(); never throws, always returns ApiResult
+        ├── hooks/                # state and side effects for components
+        │   └── useChat.ts        # list of entries + the ask flow (useReducer)
+        ├── components/           # what's drawn on screen
+        │   ├── layout/           # TopBand.tsx, PassbookPage.tsx
+        │   ├── entry/            # EntryList.tsx, Entry.tsx, PrintingLine.tsx, Stamp.tsx, HowIGotThis.tsx
+        │   ├── answer/           # AnswerView.tsx, KpiFigure.tsx, DataTable.tsx, ChartView.tsx
+        │   ├── input/            # TellerSlip.tsx
+        │   ├── EmptyState.tsx    # first page with the example questions
+        │   ├── CopyMenu.tsx      # copy text | CSV | chart PNG
+        │   ├── ErrorBoundary.tsx # AppErrorBoundary + EntryErrorBoundary
+        │   └── ui/               # shadcn components (button, textarea, dropdown-menu, tooltip, table, toggle-group, collapsible, sonner, chart)
+        ├── lib/                  # plain functions, no React
+        │   ├── format.ts         # INR, percent, number, date
+        │   ├── pivot.ts          # long rows → chart series
+        │   ├── csv.ts            # rows → CSV text
+        │   ├── copy.ts           # clipboard text / PNG, download fallback
+        │   └── errorView.ts      # error code → stamp, message, retry (§10)
+        └── test/
+            └── apiClient.test.ts
 ```
 
-## 12. Frontend
-
-```
-client/src/
-  main.tsx, App.tsx, styles.css
-  api/client.ts                  // typed fetch → ApiResponse<AskResult>
-  components/
-    ChatWindow.tsx               // message list, auto-scroll
-    MessageInput.tsx             // textarea, Enter to send, disabled while loading, 500-char counter
-    SuggestedQuestions.tsx       // chips from /api/v1/catalog
-    AnswerCard.tsx               // title, text, visual, Chart/Table toggle, "How I got this"
-    KpiCard.tsx, DataTable.tsx, ChartView.tsx (Recharts bar/line, pivots series)
-    CopyMenu.tsx                 // Copy text | Copy CSV | Copy chart (PNG)
-    ErrorMessage.tsx
-    ui/                          // shadcn components (button, textarea, dropdown-menu, tooltip, table, toggle-group, collapsible, sonner, chart)
-  lib/copy.ts, lib/format.ts, lib/pivot.ts
-```
+## 13. Frontend behaviour
 
 - Chat history lives in React state only.
 - Copy: text and CSV via `navigator.clipboard.writeText`; chart via SVG → canvas → `ClipboardItem('image/png')`, with a "Download PNG" fallback if the browser blocks image copy.
 - Vite dev proxy sends `/api` to the server, so the client needs no env file.
 - Setup: `npx shadcn@latest init` in `client/`, then add only the components listed under `ui/`. Theme tokens live in `client/src/styles.css`.
 
-## 13. Visual design: the Bank Passbook
+## 14. Visual design: the Bank Passbook
 
 The user asked for: paper feel, animation, uncluttered, very simple, no cognitive load; not a ChatGPT clone, not a stock shadcn template.
 
@@ -341,7 +531,7 @@ Map these onto shadcn's CSS variables (`--background`, `--foreground`, `--primar
 ### Type
 
 - **Public Sans** (self-hosted via `@fontsource/public-sans`) for everything you read: questions, answer sentences, labels, buttons. Figures use `font-variant-numeric: tabular-nums`, so numbers line up and don't jitter while counting up.
-- **Courier Prime** (`@fontsource/courier-prime`) only for the printed parts of an entry: entry number, date, and the SQL in "How I got this". It's the passbook printer's voice. Never use it for body text.
+- **Courier Prime** (`@fontsource/courier-prime`) only for the printed parts of an entry: entry number, date, the SQL in "How I got this", and the error `Ref:` line. It's the passbook printer's voice. Never use it for body text.
 - Scale: answer figure 48px, entry question 17px semibold, answer sentence 17px, labels 13px. Keep the answer sentence under 70 characters per line.
 
 ### Layout
@@ -394,26 +584,18 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 -->
 ```
 
-## 14. Tests (minimum)
+## 15. Tests (minimum)
 
-| File                               | What it proves                                                                                                                                                    |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/test/buildQuery.test.ts`   | Plan → expected SQL + params; `LIMIT` always present and capped.                                                                                                  |
-| `server/test/validatePlan.test.ts` | Rejects unknown dataset/metric, a metric from the wrong dataset, a filter value not in the list, and an injection attempt like `"segment; DROP TABLE customers"`. |
-| `server/test/ask.api.test.ts`      | With `AI_PROVIDER=mock` and a seeded temp DB: rejection-rate question → 200, bar chart, rows sorted desc; empty question → 400; off-topic question → 422.         |
+| File                                | What it proves                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/test/buildQuery.test.ts`    | Plan → expected SQL + params; `LIMIT` always present and capped.                                                                                                                                                                                                                                                                                          |
+| `server/test/validatePlan.test.ts`  | Rejects unknown dataset/metric, a metric from the wrong dataset, a filter value not in the list, and an injection attempt like `"segment; DROP TABLE customers"`.                                                                                                                                                                                         |
+| `server/test/ask.api.test.ts`       | With `AI_PROVIDER=mock` and a seeded temp DB: rejection-rate question → 200, bar chart, rows sorted desc; empty question → 400; off-topic question → 422 with suggestions; a planner that throws → 502 `AI_ERROR` with no stack or provider text in the body; unknown route → 404. Every error body has a `requestId` matching the `X-Request-Id` header. |
+| `client/src/test/apiClient.test.ts` | With `fetch` stubbed: rejected fetch → `NETWORK_ERROR`; HTML body with status 502 → `NETWORK_ERROR`; JSON that fails the schema → `INVALID_RESPONSE`; a server error body is passed through unchanged.                                                                                                                                                    |
 
-## 15. Repo layout and scripts
+## 16. Repo layout and scripts
 
-```
-conversational-data-analyst/
-  package.json              # workspaces: shared, server, client; engines node >=26
-  tsconfig.base.json        # strict: true, noUncheckedIndexedAccess: true
-  vitest.config.ts          # test.projects: server, client
-  eslint.config.js  .prettierrc.json  .prettierignore  .editorconfig  .nvmrc
-  .github/workflows/ci.yml  # format:check, lint, typecheck, test, build on push + PR
-  .env.example  .gitignore  README.md  SPEC.md
-  shared/  server/  client/
-```
+The full file tree is in §12.
 
 `shared` is a source-only package (`"exports": "./src/index.ts"`); Vite and `tsx` both read TS directly.
 
@@ -448,21 +630,21 @@ Versions checked on 25 Nov 2026: `better-sqlite3` 13.2.0 installs on Node 26 wit
 
 The server loads the root `.env` with Node's `--env-file-if-exists` flag (through `tsx`); every env var has a default, so `npm run dev` works without a `.env`.
 
-## 16. 60-minute build order (one commit per step)
+## 17. 60-minute build order (one commit per step)
 
-| Min   | Step                                                                                                                                                                               | Commit                                                |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| 0–5   | `git init`, first commit (spec), then `gh repo create conversational-data-analyst --private --source . --push`; workspaces, tsconfig, `.gitignore`, `.env.example`, copy this spec | `chore: scaffold workspaces`                          |
-| 5–15  | `shared` types + plan schema; schema.sql + seed; catalog                                                                                                                           | `feat: banking schema, seed data and query catalog`   |
-| 15–25 | `validatePlan`, `buildQuery`, `runQuery` + their tests                                                                                                                             | `feat: safe query builder with allow-list validation` |
-| 25–35 | AI provider (AI SDK + mock), prompt, `/api/v1/ask`, error handler, security middleware, API test                                                                                   | `feat: ask endpoint with AI query planner`            |
-| 35–50 | `shadcn init` + passbook theme tokens (§13), chat UI, answer entry, KPI/table/charts, copy menu, error states                                                                      | `feat: chat UI with charts and copy actions`          |
-| 50–57 | README (architecture, assumptions, done, limits, productionising, AI disclosure)                                                                                                   | `docs: README and setup instructions`                 |
-| 57–60 | Buffer: run tests, typecheck, final push                                                                                                                                           | —                                                     |
+| Min   | Step                                                                                                                                                                                                                                                                                                                      | Commit                                                |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 0–5   | `git init`, first commit (spec), then `gh repo create conversational-data-analyst --private --source . --push`; workspaces, tsconfig, lint/format, CI, `.gitignore`, `.env.example`; `GET /api/v1/health`, `AppError` + error handler, 404/405, security middleware (helmet, CORS, body limit); health page in the client | `chore: scaffold workspaces with health endpoint`     |
+| 5–15  | `shared` types + plan schema; schema.sql + seed; catalog                                                                                                                                                                                                                                                                  | `feat: banking schema, seed data and query catalog`   |
+| 15–25 | `validatePlan`, `buildQuery`, `runQuery` + their tests                                                                                                                                                                                                                                                                    | `feat: safe query builder with allow-list validation` |
+| 25–35 | AI provider (AI SDK + mock), prompt, `/api/v1/ask`, rate limit, request ids + logging (`pino-http`), API test                                                                                                                                                                                                             | `feat: ask endpoint with AI query planner`            |
+| 35–50 | `shadcn init` + passbook theme tokens (§14), chat UI, answer entry, KPI/table/charts, copy menu, error states                                                                                                                                                                                                             | `feat: chat UI with charts and copy actions`          |
+| 50–57 | README (architecture, assumptions, done, limits, productionising, AI disclosure)                                                                                                                                                                                                                                          | `docs: README and setup instructions`                 |
+| 57–60 | Buffer: run tests, typecheck, final push                                                                                                                                                                                                                                                                                  | —                                                     |
 
 If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/catalog` (hard-code chips), extra mock-planner variants (keep the four example questions).
 
-## 17. README outline (submission)
+## 18. README outline (submission)
 
 1. What it does + screenshot
 2. Setup (Node version, `npm install`, `npm run db:seed`, `.env`, `npm run dev`, `npm test`)
@@ -470,10 +652,10 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/cata
 4. Assumptions (questions are single-turn; data is synthetic; all amounts in INR; rejection rate = rejected ÷ all applications, pending included)
 5. Completed functionality (checklist against the brief)
 6. Known limitations (only catalog questions; no follow-ups; no auth; SQLite; single-node rate limit; no AI retry)
-7. Productionising: Postgres with a read-only DB role and statement timeout; auth + per-user rate limits; move catalog to config/semantic layer; AI response caching; observability (request IDs, structured logs, AI latency/cost metrics); eval set of questions → expected plans run in CI; compile `shared` with project references; Docker + CI pipeline
+7. Productionising: Postgres with a read-only DB role and statement timeout; auth + per-user rate limits; move catalog to config/semantic layer; AI response caching; observability (ship the structured logs to a log store, metrics and alerts on AI latency, cost and error rates); eval set of questions → expected plans run in CI; compile `shared` with project references; Docker + CI pipeline
 8. AI tools used and decisions I made myself (query-plan approach over AI SQL, catalog allow-list, deterministic visual choice and summaries, SQLite, AI SDK for model switching, Gemini 4 Hydrogen for speed, workspaces with shared types)
 
-## 18. Settled answers
+## 19. Settled answers
 
 - Model: `gemini-4-hydrogen` via a real Gemini API key; mock only for tests.
 - Repo: private on GitHub, made public when sharing.
@@ -482,6 +664,6 @@ If behind schedule, cut in this order: PNG copy (keep text + CSV), `/api/v1/cata
 
 - Currency: all amounts are INR. Format with `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })` (e.g. ₹12,34,567.00) in `client/src/lib/format.ts` and in `summarize.ts`.
 
-## 19. Open questions
+## 20. Open questions
 
 None.

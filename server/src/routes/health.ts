@@ -1,7 +1,7 @@
 import type { ApiResponse, Health } from '@cda/shared';
 import { Router } from 'express';
 import pkg from '../../package.json' with { type: 'json' };
-import { methodNotAllowed } from '../middleware/errorHandler';
+import { methodNotAllowed } from '../middleware/notFound';
 
 export function healthRouter(): Router {
   const router = Router();
@@ -21,7 +21,7 @@ export function healthRouter(): Router {
       };
       res.set('Cache-Control', 'no-store').json(body);
     })
-    .all(methodNotAllowed(['GET']));
+    .all(methodNotAllowed(['GET', 'HEAD']));
 
   return router;
 }

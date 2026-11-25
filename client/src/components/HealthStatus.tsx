@@ -1,13 +1,13 @@
 import type { Health } from '@cda/shared';
 import { useEffect, useState } from 'react';
-import { type ClientResult, getHealth } from '../api/client';
+import { type ApiResult, getHealth } from '../api/client';
 
 type State =
   | { kind: 'loading' }
   | { kind: 'ok'; health: Health; checkedAt: Date }
   | { kind: 'error'; message: string };
 
-function toState(result: ClientResult<Health>): State {
+function toState(result: ApiResult<Health>): State {
   return result.ok
     ? { kind: 'ok', health: result.data, checkedAt: new Date() }
     : { kind: 'error', message: result.error.message };
@@ -39,7 +39,15 @@ export function HealthStatus() {
       {state.kind === 'ok' && (
         <>
           <p className="health-title">
-            <span className="dot dot-ok" aria-hidden="true" /> Server OK
+            {state.health.status === 'ok' ? (
+              <>
+                <span className="dot dot-ok" aria-hidden="true" /> Server OK
+              </>
+            ) : (
+              <>
+                <span className="dot dot-error" aria-hidden="true" /> Server degraded
+              </>
+            )}
           </p>
           <dl className="health-details">
             <dt>Version</dt>

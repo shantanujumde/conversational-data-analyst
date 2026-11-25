@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
 import type { Config } from './config';
-import { errorHandler, notFound } from './middleware/errorHandler';
+import { errorHandler } from './middleware/errorHandler';
+import { notFound } from './middleware/notFound';
 import { securityMiddleware } from './middleware/security';
 import { healthRouter } from './routes/health';
 

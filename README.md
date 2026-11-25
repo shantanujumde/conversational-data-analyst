@@ -1,8 +1,8 @@
 # Conversational Data Analyst
 
-Ask a business question in plain English and get an answer from sample banking data. See [SPEC.md](SPEC.md) for the full design.
+Ask a business question in plain English and get an answer from sample banking data. See [docs/SPEC.md](docs/SPEC.md) for the full design.
 
-This commit is the scaffold: a server with one REST endpoint, `GET /api/v1/health`, and a React page that calls it. The chat, AI planner and database come in later steps (SPEC §16).
+This commit is the scaffold: a server with one REST endpoint, `GET /api/v1/health`, and a React page that calls it. The chat, AI planner and database come in later steps (docs/SPEC.md §17).
 
 ## Setup
 
@@ -45,7 +45,7 @@ client/   React 19 + Vite
 | Request              | Response                                                                         |
 | -------------------- | -------------------------------------------------------------------------------- |
 | `GET /api/v1/health` | 200 `{ ok: true, data: { status, service, version, uptimeSeconds, timestamp } }` |
-| Other method on it   | 405 with `Allow: GET`, code `METHOD_NOT_ALLOWED`                                 |
+| Other method on it   | 405 with `Allow: GET, HEAD`, code `METHOD_NOT_ALLOWED`                           |
 | Unknown path         | 404, code `NOT_FOUND`                                                            |
 
 Every error uses the same shape: `{ ok: false, error: { code, message } }`.

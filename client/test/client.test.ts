@@ -23,31 +23,38 @@ describe('getHealth', () => {
     await expect(getHealth()).resolves.toEqual({ ok: true, data });
   });
 
-  it('passes through a server error response', async () => {
+  it('passes a server error body through unchanged', async () => {
     const error = { code: 'INTERNAL_ERROR', message: 'Something went wrong on our side.' };
     stubFetch(() => Promise.resolve(Response.json({ ok: false, error }, { status: 500 })));
 
     await expect(getHealth()).resolves.toEqual({ ok: false, error });
   });
 
-  it('returns NETWORK_ERROR when fetch throws', async () => {
-    stubFetch(() => Promise.reject(new TypeError('fetch failed')));
+  it.each([
+    ['fetch rejects', () => Promise.reject(new TypeError('fetch failed')), 'NETWORK_ERROR'],
+    [
+      'fetch times out',
+      () => Promise.reject(new DOMException('timed out', 'TimeoutError')),
+      'TIMEOUT',
+    ],
+    [
+      'a proxy answers 502 with HTML',
+      () => Promise.resolve(new Response('<html>Bad Gateway</html>', { status: 502 })),
+      'NETWORK_ERROR',
+    ],
+    [
+      'the body is not JSON',
+      () => Promise.resolve(new Response('<html>not json</html>')),
+      'INVALID_RESPONSE',
+    ],
+    [
+      'JSON fails the schema',
+      () => Promise.resolve(Response.json({ ok: true, data: { status: 'up' } })),
+      'INVALID_RESPONSE',
+    ],
+  ])('returns %s → %s', async (_case, impl, code) => {
+    stubFetch(impl);
 
-    const result = await getHealth();
-    expect(result).toMatchObject({ ok: false, error: { code: 'NETWORK_ERROR' } });
-  });
-
-  it('returns NETWORK_ERROR when a proxy answers 502 with a non-JSON body', async () => {
-    stubFetch(() => Promise.resolve(new Response('', { status: 502 })));
-
-    const result = await getHealth();
-    expect(result).toMatchObject({ ok: false, error: { code: 'NETWORK_ERROR' } });
-  });
-
-  it('returns INVALID_RESPONSE when the body does not match the schema', async () => {
-    stubFetch(() => Promise.resolve(new Response('<html>not json</html>')));
-
-    const result = await getHealth();
-    expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_RESPONSE' } });
+    await expect(getHealth()).resolves.toMatchObject({ ok: false, error: { code } });
   });
 });

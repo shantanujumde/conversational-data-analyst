@@ -1,5 +1,5 @@
 :root {
-  /* Passbook palette (SPEC §13). Light theme only. */
+  /* Passbook palette (docs/SPEC.md §14). Light theme only. */
   --page: #eef3ef;
   --surface: #ffffff;
   --ink: #23262b;
