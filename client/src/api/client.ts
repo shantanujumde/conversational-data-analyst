@@ -2,49 +2,49 @@ import {
   type ApiFailure,
   ApiResponseSchema,
   type ApiSuccess,
+  type AskResult,
+  AskResultSchema,
+  type CatalogResponse,
+  CatalogResponseSchema,
   type ErrorBody,
   type ErrorCode,
   type Health,
   HealthSchema,
 } from '@cda/shared';
 import type { z } from 'zod';
+import { errorView } from '@/lib/errorView';
 
 /** Server codes plus the ones the client creates itself (SPEC §10.3). */
 export type ClientErrorCode = ErrorCode | 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
 
-export type ApiResult<T> =
-  | ApiSuccess<T>
-  | ApiFailure<
-      Omit<ErrorBody, 'code' | 'requestId'> & { code: ClientErrorCode; requestId?: string }
-    >;
+export type ClientError = Omit<ErrorBody, 'code' | 'requestId'> & {
+  code: ClientErrorCode;
+  requestId?: string;
+};
 
-// Texts from SPEC §10.1. They move to lib/errorView.ts with the chat UI.
-const CLIENT_ERROR_MESSAGE = {
-  NETWORK_ERROR: "Couldn't reach the server. Check your connection and try again.",
-  TIMEOUT: 'This is taking too long. Please try again.',
-  INVALID_RESPONSE: "The server sent an answer we couldn't read. Please try again.",
-} as const;
+export type ApiResult<T> = ApiSuccess<T> | ApiFailure<ClientError>;
 
-type ClientOnlyCode = keyof typeof CLIENT_ERROR_MESSAGE;
+type ClientOnlyCode = 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
 
 function clientError(code: ClientOnlyCode): ApiResult<never> {
-  return { ok: false, error: { code, message: CLIENT_ERROR_MESSAGE[code] } };
+  return { ok: false, error: { code, message: errorView[code].fallbackMessage } };
 }
 
+/** A little longer than the server's 15 s AI timeout. */
 const TIMEOUT_MS = 20_000;
 
 /** The only place that turns a failed request into a result. Never throws. */
 async function request<T extends z.ZodType>(
   path: string,
   dataSchema: T,
-  init?: RequestInit,
+  init: RequestInit = {},
 ): Promise<ApiResult<z.infer<T>>> {
   let res: Response;
   try {
     res = await fetch(path, {
-      headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
       ...init,
+      headers: { Accept: 'application/json', ...init.headers },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
     return clientError(
@@ -64,6 +64,21 @@ async function request<T extends z.ZodType>(
   return parsed.success ? (parsed.data as ApiResult<z.infer<T>>) : clientError('INVALID_RESPONSE');
 }
 
+/** POST /api/v1/ask */
+export function ask(question: string): Promise<ApiResult<AskResult>> {
+  return request('/api/v1/ask', AskResultSchema, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: question.trim() }),
+  });
+}
+
+/** GET /api/v1/catalog */
+export function getCatalog(): Promise<ApiResult<CatalogResponse>> {
+  return request('/api/v1/catalog', CatalogResponseSchema);
+}
+
+/** GET /api/v1/health */
 export function getHealth(): Promise<ApiResult<Health>> {
   return request('/api/v1/health', HealthSchema);
 }
