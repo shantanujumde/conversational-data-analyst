@@ -11,7 +11,6 @@ import { SUGGESTIONS } from '../catalog/examples';
 import { AppError } from '../errors';
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-const MAX_FREE_VALUE_LENGTH = 100;
 export const MAX_LIMIT = 100;
 
 export interface ValidatedPlan {
@@ -45,15 +44,9 @@ function normalizeValue(id: string, dimension: Dimension, value: string): string
     if (!MONTH.test(value)) reject(`filter ${id}: "${value}" is not a YYYY-MM month`);
     return value;
   }
-  if (dimension.values) {
-    const match = dimension.values.find((allowed) => allowed.toLowerCase() === value.toLowerCase());
-    if (match === undefined) reject(`filter ${id}: "${value}" is not an allowed value`);
-    return match;
-  }
-  if (value.length === 0 || value.length > MAX_FREE_VALUE_LENGTH) {
-    reject(`filter ${id}: value length out of range`);
-  }
-  return value;
+  const match = dimension.values?.find((allowed) => allowed.toLowerCase() === value.toLowerCase());
+  if (match === undefined) reject(`filter ${id}: "${value}" is not an allowed value`);
+  return match;
 }
 
 /** Checks a plan against the catalog allow-list (docs/SPEC.md §6, layer 2). */
@@ -80,6 +73,7 @@ export function validatePlan(plan: QueryPlanQuery): ValidatedPlan {
   const filters = plan.filters.map((filter) => {
     const dimension = getDimension(dataset, filter.dimension);
     if (!dimension) reject(`filter dimension "${filter.dimension}" is not in ${plan.dataset}`);
+    if (dimension.filterable === false) reject(`dimension "${filter.dimension}" can't be filtered`);
     if (filter.values.length === 0) reject(`filter ${filter.dimension} has no values`);
     const values = filter.values.map((v) => normalizeValue(filter.dimension, dimension, v));
     return { id: filter.dimension, dimension, values };

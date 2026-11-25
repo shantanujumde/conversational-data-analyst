@@ -48,6 +48,17 @@ export class AppError extends Error {
   }
 }
 
+/** RATE_LIMITED with the SPEC §10.1 text and the wait the client counts down from. */
+export function rateLimited(seconds: number): AppError {
+  return new AppError(
+    'RATE_LIMITED',
+    `Too many questions at once. Try again in ${seconds} seconds.`,
+    {
+      retryAfterSeconds: seconds,
+    },
+  );
+}
+
 const BODY_PARSER_ERRORS: Record<string, () => AppError> = {
   'entity.parse.failed': () => new AppError('VALIDATION_ERROR', 'Request body is not valid JSON.'),
   'entity.too.large': () =>

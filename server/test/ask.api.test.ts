@@ -88,6 +88,7 @@ describe('POST /api/v1/ask', () => {
       format: 'number',
     });
     expect(data.rows).toHaveLength(1);
+    expect(data.text).toMatch(/^Applications with status Rejected: [\d,]+\.$/);
   });
 
   it('uses a table for two dimensions and two metrics', async () => {
@@ -109,22 +110,38 @@ describe('POST /api/v1/ask', () => {
     expect(data.text).toMatch(/has the highest total value at ₹[\d,]+\.\d{2}\.$/);
   });
 
+  /** A planner that always returns this plan for January 2020, a month with no data. */
+  const january2020 = (metric: string): Planner => ({
+    provider: 'mock',
+    model: 'fixed',
+    plan: () =>
+      Promise.resolve({
+        kind: 'query',
+        dataset: 'applications',
+        metrics: [metric],
+        groupBy: [],
+        filters: [],
+        dateRange: { from: '2020-01-01', to: '2020-01-31' },
+        title: 'January 2020',
+      }),
+  });
+
+  it('shows a count of 0 as a real KPI answer', async () => {
+    const data = okData(
+      await ask('Applications in January 2020', makeApp(january2020('application_count'))),
+    );
+
+    expect(data).toMatchObject({
+      text: 'Applications from 2020-01-01 to 2020-01-31: 0.',
+      visualization: { type: 'kpi', valueKey: 'application_count' },
+      rows: [{ application_count: 0 }],
+    });
+  });
+
   it('returns a text answer, not an error, when nothing matches', async () => {
-    const planner: Planner = {
-      provider: 'mock',
-      model: 'empty',
-      plan: () =>
-        Promise.resolve({
-          kind: 'query',
-          dataset: 'applications',
-          metrics: ['application_count'],
-          groupBy: [],
-          filters: [],
-          dateRange: { from: '2020-01-01', to: '2020-01-31' },
-          title: 'Applications in January 2020',
-        }),
-    };
-    const data = okData(await ask('Applications in January 2020', makeApp(planner)));
+    const data = okData(
+      await ask('Approval rate in January 2020', makeApp(january2020('approval_rate'))),
+    );
 
     expect(data).toMatchObject({
       text: 'No data matched this question.',
@@ -140,6 +157,14 @@ describe('POST /api/v1/ask', () => {
   ])('rejects %s with 400', async (_case, question, message) => {
     const error = expectError(await ask(question), 400, 'VALIDATION_ERROR');
     expect(error.message).toBe(message);
+  });
+
+  it.each([
+    ['no body', () => request(app).post('/api/v1/ask')],
+    ['an array body', () => request(app).post('/api/v1/ask').send(['How many customers?'])],
+  ])('rejects %s with 400 and our own message', async (_case, send) => {
+    const error = expectError(await send(), 400, 'VALIDATION_ERROR');
+    expect(error.message).toBe('Please type a question.');
   });
 
   it('refuses an off-topic question with 422 and three suggestions', async () => {
@@ -245,7 +270,7 @@ describe('POST /api/v1/ask', () => {
 });
 
 describe('GET /api/v1/catalog', () => {
-  it('lists the datasets and example questions', async () => {
+  it('lists the datasets and the four brief questions, in brief order', async () => {
     const res = await request(app).get('/api/v1/catalog');
 
     expect(res.status).toBe(200);
@@ -256,7 +281,12 @@ describe('GET /api/v1/catalog', () => {
       'transactions',
       'customers',
     ]);
-    expect(body.data.examples).toContain('Which branches have the highest rejection rate?');
+    expect(body.data.examples).toEqual([
+      'Show monthly onboarding applications by customer segment',
+      'Which branches have the highest rejection rate?',
+      'Compare retail and SME onboarding volumes',
+      'Show the top five customers by transaction value',
+    ]);
   });
 });
 

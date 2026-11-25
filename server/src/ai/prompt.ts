@@ -8,9 +8,9 @@ function describeDataset(id: string, dataset: Dataset): string {
     const values =
       d.kind === 'time'
         ? 'values are YYYY-MM months'
-        : d.values
-          ? `values: ${d.values.join(', ')}`
-          : 'any name';
+        : d.filterable === false
+          ? 'any name; group by only, never filter on it'
+          : `values: ${(d.values ?? []).join(', ')}`;
     return `  - ${dimId}: ${d.label} (${values})`;
   });
   return [
@@ -41,7 +41,7 @@ Rules:
 2. metrics: 1 to 3 metric ids from the chosen dataset. groupBy: 0 to 2 dimension ids from the same dataset.
 3. A single figure ("how many", "what is the total") has no groupBy.
 4. "Monthly", "per month", "over time" or "trend" questions group by month first.
-5. filters: equality only. Every value must be one of the listed values, spelled exactly. Month filter values are YYYY-MM.
+5. filters: equality only. Every value must be one of the listed values, spelled exactly. Month filter values are YYYY-MM. A dimension marked "group by only" (customer) can't be filtered: if the question needs that filter, return "unsupported".
 6. For a time period ("last 3 months", "in March"), use dateRange with from and to as YYYY-MM-DD dates.
 7. "Highest", "top" or "most" means sort descending by that metric; "lowest" means ascending. "Top five" means limit 5. sort.by must be one of the plan's metrics or groupBy dimensions.
 8. "Compare A and B" means group by the dimension those values belong to and filter it to those values.

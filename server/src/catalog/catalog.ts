@@ -4,7 +4,7 @@
  */
 import { type CatalogResponse, DATASET_IDS, type DatasetId } from '@cda/shared';
 import { BRANCHES } from '../db/seed';
-import { EXAMPLE_QUESTIONS } from './examples';
+import { BRIEF_QUESTIONS } from './examples';
 
 export type MetricFormat = 'number' | 'percent' | 'currency';
 
@@ -21,8 +21,13 @@ export interface Dimension {
   sql: string;
   /** `time` values are `YYYY-MM` months; `category` values are plain labels. */
   kind: 'time' | 'category';
-  /** The only values a filter may use. Without it, any value is accepted (still sent as a parameter). */
+  /** The only values a filter may use (category dimensions). */
   values?: readonly string[];
+  /**
+   * `false` for a category with no fixed value list (`customer`): it can be grouped by,
+   * not filtered on (docs/SPEC.md §6).
+   */
+  filterable?: false;
 }
 
 export interface Dataset {
@@ -94,7 +99,7 @@ export const CATALOG: Readonly<Record<DatasetId, Dataset>> = {
     },
     dimensions: {
       month: { label: 'Month', sql: "strftime('%Y-%m', t.txn_date)", kind: 'time' },
-      customer: { label: 'Customer', sql: 'c.name', kind: 'category' },
+      customer: { label: 'Customer', sql: 'c.name', kind: 'category', filterable: false },
       segment: { label: 'Segment', sql: 'c.segment', kind: 'category', values: SEGMENTS },
       branch: { label: 'Branch', sql: 'b.name', kind: 'category', values: BRANCH_NAMES },
       type: { label: 'Type', sql: 't.type', kind: 'category', values: ['CREDIT', 'DEBIT'] },
@@ -127,7 +132,7 @@ export function getDimension(dataset: Dataset, id: string): Dimension | undefine
   return Object.hasOwn(dataset.dimensions, id) ? dataset.dimensions[id] : undefined;
 }
 
-/** What `GET /api/v1/catalog` returns: dataset names and example questions for the UI. */
+/** What `GET /api/v1/catalog` returns: dataset names and the brief's four example questions. */
 export function getCatalogSummary(): CatalogResponse {
   return {
     datasets: DATASET_IDS.map((id) => ({
@@ -135,6 +140,6 @@ export function getCatalogSummary(): CatalogResponse {
       label: CATALOG[id].label,
       description: CATALOG[id].description,
     })),
-    examples: [...EXAMPLE_QUESTIONS],
+    examples: [...BRIEF_QUESTIONS],
   };
 }

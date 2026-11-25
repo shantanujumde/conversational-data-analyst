@@ -3,7 +3,7 @@ import express, { type RequestHandler } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import type { Config } from '../config';
-import { AppError } from '../errors';
+import { rateLimited } from '../errors';
 
 /**
  * Security headers, CORS, and the JSON body parser with its 10 KB size limit.
@@ -35,15 +35,7 @@ export function askRateLimit({ windowMs, limit }: RateLimitOptions): RequestHand
       const msLeft = resetTime ? resetTime.getTime() - Date.now() : windowMs;
       const seconds = Math.max(1, Math.ceil(msLeft / 1000));
       res.set('Retry-After', String(seconds));
-      next(
-        new AppError(
-          'RATE_LIMITED',
-          `Too many questions at once. Try again in ${seconds} seconds.`,
-          {
-            retryAfterSeconds: seconds,
-          },
-        ),
-      );
+      next(rateLimited(seconds));
     },
   });
 }

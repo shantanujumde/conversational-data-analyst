@@ -16,8 +16,8 @@ function tidy(value: CellValue, format: Column['format']): CellValue {
 }
 
 /**
- * A single aggregate row with nothing in it (COUNT = 0, or AVG/SUM of no rows = NULL)
- * means nothing matched, so it is shown as an empty result.
+ * A single aggregate row whose metrics are all NULL (AVG or SUM over no rows) means nothing
+ * matched. A 0 is a real answer (a COUNT over no rows is 0), so it is shown.
  */
 function isEmptyAggregate(validated: ValidatedPlan, rows: Row[]): boolean {
   const [only] = rows;
@@ -25,8 +25,13 @@ function isEmptyAggregate(validated: ValidatedPlan, rows: Row[]): boolean {
     validated.groupBy.length === 0 &&
     rows.length === 1 &&
     only !== undefined &&
-    validated.metrics.every(({ id }) => only[id] === null || only[id] === 0)
+    validated.metrics.every(({ id }) => only[id] === null || only[id] === undefined)
   );
+}
+
+/** True when the plan is sorted by one of its metrics ("top 3 months"), not by a dimension. */
+function isSortedByMetric({ plan, metrics }: ValidatedPlan): boolean {
+  return metrics.some((m) => m.id === plan.sort?.by);
 }
 
 /** Picks the visual from the plan shape (docs/SPEC.md §8). First match wins. */
@@ -40,11 +45,13 @@ function pick(validated: ValidatedPlan): Visualization {
   }
 
   const time = groupBy.find((g) => g.dimension.kind === 'time');
-  if (time) {
+  // A month plan sorted by a metric is a ranking, not a time series: it falls through to a bar chart.
+  if (time && !isSortedByMetric(validated)) {
     const series = groupBy.find((g) => g !== time);
     return { type: 'line', x: time.id, y: metric.id, ...(series ? { series: series.id } : {}) };
   }
 
+  // One dimension (a category, or a month ranked by the metric): bars in query order.
   const [only] = groupBy;
   if (only && groupBy.length === 1) return { type: 'bar', x: only.id, y: metric.id };
 

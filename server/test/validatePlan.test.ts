@@ -52,6 +52,19 @@ describe('validatePlan', () => {
     expect(result.plan.filters).toEqual([{ dimension: 'segment', values: ['RETAIL'] }]);
   });
 
+  it('allows grouping by customer', () => {
+    const result = validatePlan(
+      plan({
+        dataset: 'transactions',
+        metrics: ['total_value'],
+        groupBy: ['customer'],
+        sort: undefined,
+      }),
+    );
+
+    expect(result.groupBy.map((g) => g.id)).toEqual(['customer']);
+  });
+
   it('defaults the limit to 100 and caps larger values', () => {
     expect(validatePlan(plan({ limit: undefined })).limit).toBe(100);
     expect(validatePlan(plan({ limit: 5000 })).limit).toBe(100);
@@ -81,6 +94,16 @@ describe('validatePlan', () => {
     ['an impossible date', { dateRange: { from: '2026-02-30', to: '2026-03-31' } }],
     ['from after to', { dateRange: { from: '2026-06-01', to: '2026-01-01' } }],
     ['a zero limit', { limit: 0 }],
+    [
+      'a filter on customer, which has no allowed-value list',
+      {
+        dataset: 'transactions',
+        metrics: ['total_value'],
+        groupBy: ['customer'],
+        sort: undefined,
+        filters: [{ dimension: 'customer', values: ['Aarav Sharma'] }],
+      },
+    ],
   ])('rejects %s', (_case, overrides) => {
     expectRejected(plan(overrides));
   });

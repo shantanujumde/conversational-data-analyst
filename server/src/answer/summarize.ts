@@ -46,6 +46,22 @@ function extreme(rows: Row[], key: string, want: 'max' | 'min'): Row | undefined
   return best;
 }
 
+/**
+ * The KPI sentence, from catalog labels and the checked filters only (never the AI's title):
+ * "Applications with status Rejected: 292."
+ */
+function kpiSentence(validated: ValidatedPlan, metricKey: string, value: string): string {
+  const metric = validated.metrics.find((m) => m.id === metricKey)?.metric.label ?? metricKey;
+  const filters = validated.filters.map(
+    ({ dimension, values }) =>
+      `${dimension.label.toLowerCase()} ${values.map(displayLabel).join(' or ')}`,
+  );
+  const filterPhrase = filters.length > 0 ? ` with ${filters.join(' and ')}` : '';
+  const { dateRange } = validated.plan;
+  const datePhrase = dateRange ? ` from ${dateRange.from} to ${dateRange.to}` : '';
+  return `${metric}${filterPhrase}${datePhrase}: ${value}.`;
+}
+
 /** One sentence built from the rows by template. The AI never writes it, so it can't invent numbers. */
 export function summarize(validated: ValidatedPlan, answer: ShapedAnswer): string {
   const { visualization: viz, rows, columns } = answer;
@@ -57,7 +73,7 @@ export function summarize(validated: ValidatedPlan, answer: ShapedAnswer): strin
   switch (viz.type) {
     case 'kpi': {
       const value = rows[0]?.[viz.valueKey] ?? null;
-      return `${validated.plan.title}: ${formatValue(value, viz.format)}.`;
+      return kpiSentence(validated, viz.valueKey, formatValue(value, viz.format));
     }
     case 'bar': {
       const lowest = validated.plan.sort?.by === viz.y && validated.plan.sort.direction === 'asc';

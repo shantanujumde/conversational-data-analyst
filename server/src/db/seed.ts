@@ -1,7 +1,6 @@
 /**
  * Creates the SQLite file with synthetic banking data: `npm run db:seed`.
- * The random generator is seeded, so every run produces the same rows
- * (dates move with `today`, so the data always covers the last 12 months).
+ * The random generator is seeded and the end date is fixed, so every run produces the same rows.
  */
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -11,6 +10,8 @@ import { type Db, openWritable } from './connection';
 import { Random } from './random';
 
 export const SEED = 20261125;
+/** Last day of the data. The 12 calendar months up to and including it are covered. */
+export const SEED_END_DATE = '2026-11-30';
 export const COUNTS = { customers: 200, applications: 1500, transactions: 5000 } as const;
 
 type Region = 'North' | 'South' | 'East' | 'West';
@@ -81,9 +82,9 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS);
 }
 
-/** First day of the month `monthsBack` months before `today`'s month (UTC). */
-function monthStart(today: Date, monthsBack: number): Date {
-  return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - monthsBack, 1));
+/** First day of the month `monthsBack` months before `date`'s month (UTC). */
+function monthStart(date: Date, monthsBack: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - monthsBack, 1));
 }
 
 function randomDateBetween(rng: Random, from: Date, to: Date): Date {
@@ -101,15 +102,10 @@ function customerName(rng: Random, segment: Segment): string {
   return `${rng.pick(CORPORATE_PREFIXES)} ${rng.pick(CORPORATE_WORDS)} Ltd`;
 }
 
-export interface SeedOptions {
-  /** The data covers the 12 calendar months up to and including this day. */
-  today?: Date;
-}
-
 /** Creates the tables and fills them. Expects an empty database. */
-export function seedDatabase(db: Db, { today = new Date() }: SeedOptions = {}): void {
+export function seedDatabase(db: Db): void {
   const rng = new Random(SEED);
-  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  const end = new Date(`${SEED_END_DATE}T00:00:00Z`);
   const windowStart = monthStart(end, 11);
   const customersSince = monthStart(end, 23);
 
@@ -198,12 +194,12 @@ export function seedDatabase(db: Db, { today = new Date() }: SeedOptions = {}): 
 }
 
 /** Deletes any file at `path` and writes a freshly seeded database there. */
-export function createSeededDatabase(path: string, options?: SeedOptions): void {
+export function createSeededDatabase(path: string): void {
   mkdirSync(dirname(path), { recursive: true });
   for (const suffix of ['', '-wal', '-shm', '-journal']) rmSync(path + suffix, { force: true });
   const db = openWritable(path);
   try {
-    seedDatabase(db, options);
+    seedDatabase(db);
   } finally {
     db.close();
   }

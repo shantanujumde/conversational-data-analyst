@@ -4,9 +4,6 @@ import { join } from 'node:path';
 import { type Db, openReadOnly } from '../../src/db/connection';
 import { createSeededDatabase } from '../../src/db/seed';
 
-/** Fixed "today" so dates in the test data never move. */
-export const TEST_TODAY = new Date('2026-11-25T00:00:00Z');
-
 export interface TestDb {
   db: Db;
   path: string;
@@ -17,7 +14,7 @@ export interface TestDb {
 export function createTestDb(): TestDb {
   const dir = mkdtempSync(join(tmpdir(), 'cda-test-'));
   const path = join(dir, 'bank.db');
-  createSeededDatabase(path, { today: TEST_TODAY });
+  createSeededDatabase(path);
   const db = openReadOnly(path);
   return {
     db,
