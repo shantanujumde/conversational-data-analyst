@@ -10,6 +10,8 @@ The AI never writes SQL. It only picks from a fixed list of datasets and measure
 
 You need Node 26 (see `.nvmrc`) and an API key: Gemini from [Google AI Studio](https://aistudio.google.com/) or OpenAI from [platform.openai.com](https://platform.openai.com/).
 
+**No key?** Set `AI_PROVIDER=mock` in `.env`. The app then runs with no key or network and answers the four example questions plus a few close variants; other questions are refused.
+
 ```sh
 npm install
 cp .env.example .env     # then set GEMINI_API_KEY, or AI_PROVIDER=openai and OPENAI_API_KEY
@@ -24,7 +26,7 @@ npm run dev              # API on :3001, app on http://localhost:5173
 | `GEMINI_API_KEY` | none         | Needed for `google`. Stays on the server.                                               |
 | `OPENAI_API_KEY` | none         | Needed for `openai`. Stays on the server.                                               |
 
-The other settings (port, database path, allowed origin) are in `.env.example`.
+The other settings (port, database path, allowed origin, rate limit, log level) are in `.env.example`.
 
 **If questions fail with "AI service" errors**, change the model or provider. During the build, `gemini-4-hydrogen` returned "high demand" (503) on almost every call, and the free tier allows only about 20 requests a day per model. `AI_MODEL=gemini-3.5-flash` worked until its daily limit. `AI_PROVIDER=openai` with `gpt-5.4-mini` answered every test question in 3–4 s.
 
@@ -135,6 +137,7 @@ Considered and rejected:
 - All data is made up. No real bank, customer, or logo appears.
 - All amounts are in INR.
 - Rejection rate = rejected ÷ all applications, pending ones included.
+- Transaction value is the sum of all transaction amounts, credits and debits together.
 - "Last 12 months" counts back from today, so the seeded dates move with the current date.
 
 ## Completed functionality
@@ -151,7 +154,7 @@ Checked against the brief in [docs/problem-statement.md](docs/problem-statement.
 - [x] Clear messages for off-topic questions, bad input, and errors
 - [x] Sample data with three datasets: customers and branches (200 and 8), 1,500 onboarding applications, 5,000 transactions
 - [x] AI plans checked against the catalog; the AI never writes SQL
-- [x] 121 automated tests, including SQL building, an injection attempt, the `/ask` endpoint end to end, and AI retries
+- [x] 149 automated tests, including SQL building, an injection attempt, all four example questions through the `/ask` endpoint end to end, and AI retries
 
 ## Known limitations
 
@@ -160,6 +163,8 @@ Checked against the brief in [docs/problem-statement.md](docs/problem-statement.
 - SQLite and an in-memory rate limit suit one server only.
 - Free-tier Gemini can be slow; with the retry, the worst answer takes about a minute.
 - The JavaScript bundle is 965 kB (287 kB gzipped), mostly the chart library.
+- Only bar and line charts copy as an image. KPI cards and tables copy as text or CSV.
+- "How I got this" shows the SQL with `?` placeholders, not the values bound to them.
 
 ## Productionising
 
