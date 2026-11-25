@@ -1,4 +1,4 @@
-import type { CellValue, Column } from '@cda/shared';
+import type { CellValue, Column, Row } from '@cda/shared';
 
 /** Characters a spreadsheet may read as the start of a formula. */
 const FORMULA_START = /^[=+\-@\t\r]/;
@@ -16,7 +16,7 @@ function cell(value: CellValue): string {
  * The header uses column labels; numbers stay raw so spreadsheets can sum them
  * (percent values are fractions, currency values are rupees).
  */
-export function toCsv(columns: readonly Column[], rows: readonly Record<string, CellValue>[]) {
+export function toCsv(columns: readonly Column[], rows: readonly Row[]) {
   const header = columns.map((c) => cell(c.label)).join(',');
   const lines = rows.map((row) => columns.map((c) => cell(row[c.key] ?? null)).join(','));
   return [header, ...lines].join('\r\n');

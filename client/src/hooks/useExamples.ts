@@ -1,6 +1,7 @@
 import type { CatalogResponse } from '@cda/shared';
 import { useEffect, useState } from 'react';
-import { type ApiResult, getCatalog } from '@/api/client';
+import { getCatalog } from '@/api/client';
+import type { ApiResult } from '@/api/types';
 
 /** The empty state prints at most this many example questions. */
 export const MAX_EXAMPLES = 4;

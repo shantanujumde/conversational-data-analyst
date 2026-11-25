@@ -1,4 +1,4 @@
-import type { ClientErrorCode } from '@/api/client';
+import type { ClientErrorCode } from '@/api/types';
 
 export type StampText = 'NOT IN LEDGER' | 'COULD NOT PRINT';
 
@@ -7,7 +7,10 @@ export interface ErrorView {
   stamp: StampText | null;
   /** Whether the entry offers "Try again". */
   retry: boolean;
-  /** Shown when the error has no message of its own (the client-only codes). */
+  /**
+   * The message for codes the client creates itself; `api/client.ts` copies it into
+   * `error.message`. The UI always shows `error.message` (SPEC §10.3).
+   */
   fallbackMessage: string;
 }
 

@@ -1,27 +1,24 @@
-import { CornerDownRight, RotateCcw } from 'lucide-react';
-import type { ClientError } from '@/api/client';
+import { RotateCcw } from 'lucide-react';
+import { QuestionList } from '@/components/QuestionList';
 import { Button } from '@/components/ui/button';
+import type { FailedState } from '@/hooks/useChat';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useEntryActions } from '@/hooks/useEntryActions';
 import { errorView, rateLimitMessage } from '@/lib/errorView';
 
 interface StampProps {
-  error: ClientError;
-  /** Epoch ms before which Try again stays disabled (rate limit). */
-  retryAt: number | null;
+  failure: FailedState;
   onRetry: () => void;
-  onAsk: (question: string) => void;
 }
 
-/** A refusal or failure: red rubber stamp, a plain reason, suggestions and Try again. */
-export function Stamp({ error, retryAt, onRetry, onAsk }: StampProps) {
+/** A refusal or failure: red rubber stamp, its Ref line, a plain reason, suggestions and Try again. */
+export function Stamp({ failure: { error, retryAt }, onRetry }: StampProps) {
+  const { submit } = useEntryActions();
   const view = errorView[error.code];
   const secondsLeft = useCountdown(retryAt);
   const suggestions = (error.suggestions ?? []).slice(0, 3);
-  // The server's "Try again in 42 seconds" goes stale; count down live instead.
-  const message =
-    error.code === 'RATE_LIMITED'
-      ? rateLimitMessage(secondsLeft)
-      : error.message || view.fallbackMessage;
+  // The UI shows `error.message`, except the rate limit: the server's "in 42 seconds" goes stale.
+  const message = error.code === 'RATE_LIMITED' ? rateLimitMessage(secondsLeft) : error.message;
 
   return (
     <div className="flex flex-col items-start gap-3">
@@ -41,36 +38,16 @@ export function Stamp({ error, retryAt, onRetry, onAsk }: StampProps) {
       <p className="max-w-[68ch] text-[17px] text-ink">{message}</p>
 
       {suggestions.length > 0 && (
-        <div className="w-full max-w-[560px]">
-          <ul className="border-t border-rule">
-            {suggestions.map((s) => (
-              <li key={s} className="border-b border-rule">
-                <button
-                  type="button"
-                  onClick={() => onAsk(s)}
-                  className="group/s flex w-full items-center gap-2 py-2 text-left text-[15px] text-ink hover:bg-cover-wash/50"
-                >
-                  <CornerDownRight
-                    strokeWidth={1.5}
-                    className="size-4 shrink-0 text-ink-soft group-hover/s:text-cover"
-                    aria-hidden="true"
-                  />
-                  {s}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <QuestionList
+          questions={suggestions}
+          onPick={submit}
+          size="md"
+          className="w-full max-w-[560px]"
+        />
       )}
 
       {view.retry && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onRetry}
-          disabled={secondsLeft > 0}
-          className="h-9 rounded-none border-ink/70 bg-transparent px-3 text-[15px] text-ink hover:bg-cover-wash/60"
-        >
+        <Button type="button" variant="outline" onClick={onRetry} disabled={secondsLeft > 0}>
           <RotateCcw strokeWidth={1.5} aria-hidden="true" />
           {secondsLeft > 0 ? (
             <span className="tabular">Try again in {secondsLeft} s</span>

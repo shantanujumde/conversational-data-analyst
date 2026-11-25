@@ -1,4 +1,4 @@
-import type { CellValue, Column } from '@cda/shared';
+import type { Column, Row } from '@cda/shared';
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 interface DataTableProps {
   columns: readonly Column[];
-  rows: readonly Record<string, CellValue>[];
+  rows: readonly Row[];
   caption: string;
 }
 

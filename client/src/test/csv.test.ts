@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toCsv } from '../src/lib/csv';
+import { toCsv } from '../lib/csv';
 import { barAnswer, emptyAnswer } from './fixtures';
 
 describe('toCsv', () => {

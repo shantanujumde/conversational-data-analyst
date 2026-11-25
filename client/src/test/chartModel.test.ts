@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartModel } from '../src/lib/chartModel';
+import { chartModel } from '../lib/chartModel';
 import { barAnswer, emptyAnswer, kpiAnswer, lineAnswer, tableAnswer } from './fixtures';
 
 describe('chartModel', () => {

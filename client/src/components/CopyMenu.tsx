@@ -15,6 +15,7 @@ import { resolveColor } from '@/lib/chartSeries';
 import { copyPng, copyText, downloadBlob, pngFilename, svgToPng } from '@/lib/copy';
 import { toCsv } from '@/lib/csv';
 import { logError } from '@/lib/log';
+import { hasRows } from '@/lib/result';
 
 const COPIED = 'Copied to clipboard';
 const BLOCKED = "Couldn't copy. Your browser blocked clipboard access.";
@@ -81,7 +82,7 @@ export function CopyMenu({ result, chart }: CopyMenuProps) {
               variant="ghost"
               size="icon"
               aria-label="Copy"
-              className="rounded-none text-ink-soft hover:bg-cover-wash/60 hover:text-ink aria-expanded:bg-cover-wash aria-expanded:text-cover"
+              className="text-ink-soft hover:bg-cover-wash/60 hover:text-ink aria-expanded:bg-cover-wash aria-expanded:text-cover"
             >
               <Copy strokeWidth={1.5} />
             </Button>
@@ -91,24 +92,21 @@ export function CopyMenu({ result, chart }: CopyMenuProps) {
       </Tooltip>
       <DropdownMenuContent
         align="end"
-        className="w-auto min-w-52 rounded-none border border-rule bg-sheet p-1 shadow-[0_4px_16px_rgb(35_38_43/0.12)] ring-0"
+        className="w-auto min-w-52 border border-rule bg-sheet p-1 shadow-menu ring-0"
       >
-        <DropdownMenuItem
-          className="rounded-none py-2"
-          onSelect={() => void copyOrWarn(result.text)}
-        >
+        <DropdownMenuItem className="py-2" onSelect={() => void copyOrWarn(result.text)}>
           Copy answer
         </DropdownMenuItem>
-        {result.rows.length > 0 && (
+        {hasRows(result) && (
           <DropdownMenuItem
-            className="rounded-none py-2"
+            className="py-2"
             onSelect={() => void copyOrWarn(toCsv(result.columns, result.rows))}
           >
             Copy data as CSV
           </DropdownMenuItem>
         )}
         {chart && (
-          <DropdownMenuItem className="rounded-none py-2" onSelect={() => void copyChart()}>
+          <DropdownMenuItem className="py-2" onSelect={() => void copyChart()}>
             Copy chart as PNG
           </DropdownMenuItem>
         )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { largestSeries, pivot } from '../src/lib/pivot';
+import { largestSeries, pivot } from '../lib/pivot';
 import { lineAnswer } from './fixtures';
 
 describe('pivot', () => {

@@ -23,11 +23,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, AppErro
     return (
       <main className="mx-auto flex min-h-dvh max-w-[960px] flex-col items-start justify-center gap-4 px-8">
         <p className="text-[22px] font-medium text-ink">Something went wrong. Reload the page.</p>
-        <Button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="h-11 rounded-none bg-cover px-5 text-[15px] font-semibold text-white hover:bg-[#173d2e]"
-        >
+        <Button type="button" size="lg" onClick={() => window.location.reload()}>
           Reload
         </Button>
       </main>
@@ -77,12 +73,7 @@ export class EntryErrorBoundary extends Component<
       <div className="flex flex-col items-start gap-3">
         <p className="text-[15px] text-ink">This answer couldn&rsquo;t be displayed.</p>
         {this.props.chartShown && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={this.props.onShowTable}
-            className="h-9 rounded-none border-ink/70 bg-transparent px-3 text-[15px] text-ink hover:bg-cover-wash/60"
-          >
+          <Button type="button" variant="outline" onClick={this.props.onShowTable}>
             Show table
           </Button>
         )}

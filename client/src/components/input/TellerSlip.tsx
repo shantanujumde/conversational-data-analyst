@@ -38,7 +38,7 @@ export function TellerSlip({ onSubmit }: TellerSlipProps) {
   return (
     <form
       onSubmit={onFormSubmit}
-      className="border-t border-dashed border-ink-soft/50 bg-sheet px-4 pt-3 pb-4 shadow-[0_-12px_24px_-16px_rgb(35_38_43/0.18)] sm:px-8 sm:pb-5"
+      className="border-t border-dashed border-ink-soft/50 bg-sheet px-4 pt-3 pb-4 shadow-slip sm:px-8 sm:pb-5"
     >
       <label htmlFor={id} className="mb-1 block text-[13px] text-ink-soft">
         Ask about branches, customers, applications or transactions
@@ -53,13 +53,9 @@ export function TellerSlip({ onSubmit }: TellerSlipProps) {
           rows={1}
           autoFocus
           aria-describedby={text.length >= COUNT_FROM ? `${id}-count` : undefined}
-          className="ruled-field max-h-[calc(28px*5)] min-h-[56px] flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[17px] text-ink shadow-none focus-visible:outline-offset-4 md:text-[17px]"
+          className="ruled-field max-h-[calc(28px*5)] min-h-[56px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-[17px] text-ink shadow-none focus-visible:outline-offset-4 md:text-[17px]"
         />
-        <Button
-          type="submit"
-          disabled={blank}
-          className="h-11 shrink-0 rounded-none bg-cover px-5 text-[15px] font-semibold text-white hover:bg-[#173d2e] disabled:opacity-40"
-        >
+        <Button type="submit" size="lg" disabled={blank} className="shrink-0">
           Print answer
         </Button>
       </div>

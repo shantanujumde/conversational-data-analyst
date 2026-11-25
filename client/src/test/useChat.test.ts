@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { chatReducer, DEFAULT_RETRY_AFTER_SECONDS, type Entry } from '../src/hooks/useChat';
+import { chatReducer, DEFAULT_RETRY_AFTER_SECONDS, type ChatEntry } from '../hooks/useChat';
 import { barAnswer, rateLimitedError, refusalError } from './fixtures';
 
 const at = new Date(2026, 10, 25, 10, 0);
 
-function asked(entries: Entry[] = [], id = 1, question = 'Which branch?') {
+function asked(entries: ChatEntry[] = [], id = 1, question = 'Which branch?') {
   return chatReducer(entries, { type: 'asked', id, question, at });
 }
 

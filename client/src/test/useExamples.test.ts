@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { examplesFrom, FALLBACK_EXAMPLES } from '../src/hooks/useExamples';
+import { examplesFrom, FALLBACK_EXAMPLES } from '../hooks/useExamples';
 import { catalog } from './fixtures';
 
 describe('examplesFrom', () => {

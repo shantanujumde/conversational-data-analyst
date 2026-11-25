@@ -1,17 +1,18 @@
 import { ChartColumn, ChartLine, Table2 } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ChartType } from '@/lib/chartModel';
 
 export type AnswerViewMode = 'chart' | 'table';
 
 interface ViewToggleProps {
   value: AnswerViewMode;
   onChange: (value: AnswerViewMode) => void;
-  chartType: 'bar' | 'line';
+  chartType: ChartType;
 }
 
-const ITEM =
-  'size-8 min-w-8 rounded-none p-0 text-ink-soft hover:bg-cover-wash/60 hover:text-ink aria-checked:bg-cover-wash aria-checked:text-cover';
+const toggleItemClass =
+  'size-8 min-w-8 p-0 text-ink-soft hover:bg-cover-wash/60 hover:text-ink aria-checked:bg-cover-wash aria-checked:text-cover';
 
 /** Switches a chart answer between the chart and its table. */
 export function ViewToggle({ value, onChange, chartType }: ViewToggleProps) {
@@ -28,7 +29,7 @@ export function ViewToggle({ value, onChange, chartType }: ViewToggleProps) {
     >
       <Tooltip>
         <TooltipTrigger asChild>
-          <ToggleGroupItem value="chart" aria-label="Chart" className={ITEM}>
+          <ToggleGroupItem value="chart" aria-label="Chart" className={toggleItemClass}>
             <ChartIcon strokeWidth={1.5} />
           </ToggleGroupItem>
         </TooltipTrigger>
@@ -36,7 +37,7 @@ export function ViewToggle({ value, onChange, chartType }: ViewToggleProps) {
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
-          <ToggleGroupItem value="table" aria-label="Table" className={ITEM}>
+          <ToggleGroupItem value="table" aria-label="Table" className={toggleItemClass}>
             <Table2 strokeWidth={1.5} />
           </ToggleGroupItem>
         </TooltipTrigger>

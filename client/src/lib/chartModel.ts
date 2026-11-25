@@ -1,7 +1,11 @@
-import type { AskResult, CellValue, Column } from '@cda/shared';
+import type { AskResult, Column, Row, Visualization } from '@cda/shared';
 import { MAX_SERIES, type SeriesStyle, seriesStyle } from './chartSeries';
 import { formatLabel } from './format';
 import { largestSeries, pivot } from './pivot';
+import { findColumn, hasRows } from './result';
+
+/** The chart kinds an answer can have. */
+export type ChartType = Extract<Visualization, { type: 'bar' | 'line' }>['type'];
 
 export interface ChartSeries extends SeriesStyle {
   /** Data key in `data` rows. */
@@ -10,8 +14,8 @@ export interface ChartSeries extends SeriesStyle {
 }
 
 export interface ChartModel {
-  type: 'bar' | 'line';
-  data: Record<string, CellValue>[];
+  type: ChartType;
+  data: Row[];
   /** Dimension key on the category / time axis. */
   x: string;
   /** The metric column (label and format for ticks, labels and tooltips). */
@@ -25,9 +29,9 @@ export interface ChartModel {
 export function chartModel(result: AskResult): ChartModel | null {
   const vis = result.visualization;
   if (vis.type !== 'bar' && vis.type !== 'line') return null;
-  if (result.rows.length === 0) return null;
+  if (!hasRows(result)) return null;
 
-  const y = result.columns.find((c) => c.key === vis.y) ?? {
+  const y = findColumn(result.columns, vis.y) ?? {
     key: vis.y,
     label: vis.y,
     format: 'number' as const,

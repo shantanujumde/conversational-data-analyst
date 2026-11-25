@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { errorView, rateLimitMessage } from '../src/lib/errorView';
+import { errorView, rateLimitMessage } from '../lib/errorView';
 
 describe('rateLimitMessage', () => {
   it('counts down with the seconds left', () => {

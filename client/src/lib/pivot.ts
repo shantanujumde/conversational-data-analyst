@@ -1,6 +1,4 @@
-import type { CellValue } from '@cda/shared';
-
-type Row = Record<string, CellValue>;
+import type { Row } from '@cda/shared';
 
 export interface Series {
   /** Safe data key for the chart (`s0`, `s1`, …); series values can contain spaces. */

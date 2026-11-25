@@ -1,31 +1,15 @@
 import {
-  type ApiFailure,
   ApiResponseSchema,
-  type ApiSuccess,
   type AskResult,
   AskResultSchema,
   type CatalogResponse,
   CatalogResponseSchema,
-  type ErrorBody,
-  type ErrorCode,
-  type Health,
-  HealthSchema,
 } from '@cda/shared';
 import type { z } from 'zod';
 import { errorView } from '@/lib/errorView';
+import type { ApiResult, ClientOnlyCode } from './types';
 
-/** Server codes plus the ones the client creates itself (SPEC §10.3). */
-export type ClientErrorCode = ErrorCode | 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
-
-export type ClientError = Omit<ErrorBody, 'code' | 'requestId'> & {
-  code: ClientErrorCode;
-  requestId?: string;
-};
-
-export type ApiResult<T> = ApiSuccess<T> | ApiFailure<ClientError>;
-
-type ClientOnlyCode = 'NETWORK_ERROR' | 'TIMEOUT' | 'INVALID_RESPONSE';
-
+/** The client codes have no server message, so they use their fallback text. */
 function clientError(code: ClientOnlyCode): ApiResult<never> {
   return { ok: false, error: { code, message: errorView[code].fallbackMessage } };
 }
@@ -69,16 +53,11 @@ export function ask(question: string): Promise<ApiResult<AskResult>> {
   return request('/api/v1/ask', AskResultSchema, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question: question.trim() }),
+    body: JSON.stringify({ question }),
   });
 }
 
 /** GET /api/v1/catalog */
 export function getCatalog(): Promise<ApiResult<CatalogResponse>> {
   return request('/api/v1/catalog', CatalogResponseSchema);
-}
-
-/** GET /api/v1/health */
-export function getHealth(): Promise<ApiResult<Health>> {
-  return request('/api/v1/health', HealthSchema);
 }

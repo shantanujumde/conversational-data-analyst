@@ -54,7 +54,7 @@ interface PassbookPageProps {
 export function PassbookPage({ children, footer }: PassbookPageProps) {
   return (
     <main className="mx-auto w-full max-w-[960px] sm:px-4 sm:pt-6">
-      <div className="relative flex min-h-[calc(100dvh-3rem)] flex-col bg-sheet shadow-[0_1px_2px_rgb(35_38_43/0.06),0_12px_32px_-8px_rgb(35_38_43/0.14)] sm:min-h-[calc(100dvh-4.5rem)]">
+      <div className="relative flex min-h-[calc(100dvh-3rem)] flex-col bg-sheet shadow-sheet sm:min-h-[calc(100dvh-4.5rem)]">
         <Guilloche />
         <div className="relative flex-1">{children}</div>
         <div className="sticky bottom-0 z-10">{footer}</div>

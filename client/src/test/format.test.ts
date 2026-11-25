@@ -9,7 +9,7 @@ import {
   formatNumber,
   formatPercent,
   formatValue,
-} from '../src/lib/format';
+} from '../lib/format';
 
 describe('format', () => {
   it('formats INR with Indian digit grouping', () => {

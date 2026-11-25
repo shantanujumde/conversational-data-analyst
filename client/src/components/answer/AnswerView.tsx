@@ -1,6 +1,7 @@
 import type { AskResult } from '@cda/shared';
 import type { Ref } from 'react';
 import type { ChartModel } from '@/lib/chartModel';
+import { findColumn, hasRows } from '@/lib/result';
 import { ChartView } from './ChartView';
 import { DataTable } from './DataTable';
 import { KpiFigure } from './KpiFigure';
@@ -21,7 +22,7 @@ export function AnswerView({ result, model, view, chartRef }: AnswerViewProps) {
   if (vis.type === 'kpi') {
     const row = result.rows[0];
     if (row) {
-      const label = result.columns.find((c) => c.key === vis.valueKey)?.label ?? result.title;
+      const label = findColumn(result.columns, vis.valueKey)?.label ?? result.title;
       return <KpiFigure value={row[vis.valueKey] ?? null} format={vis.format} label={label} />;
     }
   }
@@ -30,7 +31,7 @@ export function AnswerView({ result, model, view, chartRef }: AnswerViewProps) {
     return <ChartView ref={chartRef} model={model} title={result.title} />;
   }
 
-  if (result.rows.length > 0) {
+  if (hasRows(result)) {
     return <DataTable columns={result.columns} rows={result.rows} caption={result.title} />;
   }
 

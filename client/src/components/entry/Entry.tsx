@@ -1,35 +1,25 @@
-import type { AskResult } from '@cda/shared';
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnswerView } from '@/components/answer/AnswerView';
 import { type AnswerViewMode, ViewToggle } from '@/components/answer/ViewToggle';
 import { CopyMenu } from '@/components/CopyMenu';
 import { EntryErrorBoundary } from '@/components/ErrorBoundary';
-import type { Entry as ChatEntry } from '@/hooks/useChat';
+import type { ChatEntry } from '@/hooks/useChat';
+import { useEntryActions } from '@/hooks/useEntryActions';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { chartModel } from '@/lib/chartModel';
 import { formatEntryDate, formatEntryNumber } from '@/lib/format';
+import { printLineStyle } from '@/lib/printLine';
+import { hasRows } from '@/lib/result';
 import { HowIGotThis } from './HowIGotThis';
 import { PrintingLine } from './PrintingLine';
 import { Stamp } from './Stamp';
-
-/** Stagger index for the print-line wipe (50 ms per line). */
-const line = (n: number) => ({ '--line': n }) as CSSProperties;
-
-function hasVisual(result: AskResult): boolean {
-  return result.rows.length > 0;
-}
-
-interface EntryProps {
-  entry: ChatEntry;
-  onAsk: (question: string) => void;
-  onRetry: (entry: ChatEntry) => void;
-}
 
 /**
  * One ruled passbook row: number and date on the left, the question and its
  * answer in the middle, quiet actions on the right.
  */
-export function Entry({ entry, onAsk, onRetry }: EntryProps) {
+export function Entry({ entry }: { entry: ChatEntry }) {
+  const { retry } = useEntryActions();
   const [view, setView] = useState<AnswerViewMode>('chart');
   const rowRef = useRef<HTMLLIElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
@@ -66,25 +56,18 @@ export function Entry({ entry, onAsk, onRetry }: EntryProps) {
 
         {state.status === 'pending' && <PrintingLine />}
 
-        {state.status === 'failed' && (
-          <Stamp
-            error={state.error}
-            retryAt={state.retryAt}
-            onRetry={() => onRetry(entry)}
-            onAsk={onAsk}
-          />
-        )}
+        {state.status === 'failed' && <Stamp failure={state} onRetry={() => retry(entry)} />}
 
         {result && (
           <>
             <p
               className="print-line max-w-[68ch] text-[17px] leading-relaxed text-ink"
-              style={line(1)}
+              style={printLineStyle(1)}
             >
               {result.text}
             </p>
-            {hasVisual(result) && (
-              <div className="print-line mt-2" style={line(2)}>
+            {hasRows(result) && (
+              <div className="print-line mt-2" style={printLineStyle(2)}>
                 <EntryErrorBoundary
                   resetKey={view}
                   chartShown={model !== null && view === 'chart'}
@@ -94,7 +77,7 @@ export function Entry({ entry, onAsk, onRetry }: EntryProps) {
                 </EntryErrorBoundary>
               </div>
             )}
-            <div className="print-line mt-1" style={line(3)}>
+            <div className="print-line mt-1" style={printLineStyle(3)}>
               <HowIGotThis result={result} />
             </div>
           </>

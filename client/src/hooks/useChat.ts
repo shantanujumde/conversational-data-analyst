@@ -1,6 +1,7 @@
 import type { AskResult } from '@cda/shared';
 import { useCallback, useReducer, useRef } from 'react';
-import { type ApiResult, ask, type ClientError } from '@/api/client';
+import { ask } from '@/api/client';
+import type { ApiResult, ClientError } from '@/api/types';
 import { logError } from '@/lib/log';
 
 export type EntryState =
@@ -9,8 +10,10 @@ export type EntryState =
   /** `retryAt` (epoch ms) is set for RATE_LIMITED: Try again waits until then. */
   | { status: 'failed'; error: ClientError; retryAt: number | null };
 
+export type FailedState = Extract<EntryState, { status: 'failed' }>;
+
 /** One question and its answer, printed as one passbook entry. */
-export interface Entry {
+export interface ChatEntry {
   /** Entry number, from 1. Shown as "No. 001". */
   id: number;
   question: string;
@@ -39,7 +42,7 @@ function settle(result: ApiResult<AskResult>, now: number): EntryState {
   };
 }
 
-export function chatReducer(entries: Entry[], action: ChatAction): Entry[] {
+export function chatReducer(entries: ChatEntry[], action: ChatAction): ChatEntry[] {
   switch (action.type) {
     case 'asked':
       return [
@@ -78,8 +81,8 @@ export function useChat() {
     dispatch({ type: 'settled', id, result, now: Date.now() });
   }, []);
 
-  /** Prints a new entry for the question. Blank questions are ignored. */
-  const askQuestion = useCallback(
+  /** Prints a new entry for the question. The only place a question is trimmed; blank ones are ignored. */
+  const submit = useCallback(
     (question: string) => {
       const trimmed = question.trim();
       if (!trimmed) return;
@@ -92,7 +95,7 @@ export function useChat() {
 
   /** Re-sends a failed entry's question into the same entry. */
   const retry = useCallback(
-    (entry: Entry) => {
+    (entry: ChatEntry) => {
       if (entry.state.status !== 'failed') return;
       if (entry.state.retryAt !== null && Date.now() < entry.state.retryAt) return;
       dispatch({ type: 'retried', id: entry.id });
@@ -101,5 +104,5 @@ export function useChat() {
     [send],
   );
 
-  return { entries, ask: askQuestion, retry };
+  return { entries, submit, retry };
 }

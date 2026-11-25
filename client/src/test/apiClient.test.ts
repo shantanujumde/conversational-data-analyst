@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ask, getCatalog, getHealth } from '../src/api/client';
+import { ask, getCatalog } from '../api/client';
 import { barAnswer, catalog, lineAnswer, rateLimitedError, refusalError } from './fixtures';
 
 function stubFetch(impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
@@ -32,10 +32,10 @@ const failures = [
 ] as const;
 
 describe('ask', () => {
-  it('POSTs the trimmed question as JSON', async () => {
+  it('POSTs the question as JSON', async () => {
     const fetch = stubFetch(() => Promise.resolve(Response.json({ ok: true, data: barAnswer })));
 
-    await ask('  Which branches have the highest rejection rate?  ');
+    await ask('Which branches have the highest rejection rate?');
 
     const [url, init] = fetch.mock.calls[0] ?? [];
     expect(url).toBe('/api/v1/ask');
@@ -115,44 +115,5 @@ describe('getCatalog', () => {
       ok: false,
       error: { code: 'INVALID_RESPONSE' },
     });
-  });
-});
-
-describe('getHealth', () => {
-  it('returns parsed data for a valid OK response', async () => {
-    const data = {
-      status: 'ok',
-      service: 'cda-server',
-      version: '0.1.0',
-      uptimeSeconds: 5,
-      timestamp: '2026-11-25T10:00:00.000Z',
-    };
-    stubFetch(() => Promise.resolve(Response.json({ ok: true, data })));
-
-    await expect(getHealth()).resolves.toEqual({ ok: true, data });
-  });
-
-  it('passes a server error body through unchanged', async () => {
-    const error = {
-      code: 'INTERNAL_ERROR',
-      message: 'Something went wrong on our side.',
-      requestId: 'req-123',
-    };
-    stubFetch(() => Promise.resolve(Response.json({ ok: false, error }, { status: 500 })));
-
-    await expect(getHealth()).resolves.toEqual({ ok: false, error });
-  });
-
-  it.each([
-    ...failures,
-    [
-      'JSON fails the schema',
-      () => Promise.resolve(Response.json({ ok: true, data: { status: 'up' } })),
-      'INVALID_RESPONSE',
-    ] as const,
-  ])('returns %s → %s', async (_case, impl, code) => {
-    stubFetch(impl);
-
-    await expect(getHealth()).resolves.toMatchObject({ ok: false, error: { code } });
   });
 });
