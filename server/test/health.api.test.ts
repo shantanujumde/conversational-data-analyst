@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { loadConfig } from '../src/config';
 
-const app = createApp(loadConfig({}));
+const app = createApp(loadConfig({ AI_PROVIDER: 'mock' }));
 
 describe('GET /api/v1/health', () => {
   it('returns 200 with a valid health body and no caching', async () => {

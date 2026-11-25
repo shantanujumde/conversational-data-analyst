@@ -1,7 +1,17 @@
 import { createApp } from './app';
-import { loadConfig } from './config';
+import { type Config, ConfigError, loadConfig } from './config';
 
-const config = loadConfig();
+function loadConfigOrExit(): Config {
+  try {
+    return loadConfig();
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
+const config = loadConfigOrExit();
 const app = createApp(config);
 
 const server = app.listen(config.PORT, () => {
