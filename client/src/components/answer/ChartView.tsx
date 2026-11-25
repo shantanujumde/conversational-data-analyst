@@ -134,7 +134,8 @@ export function ChartView({ model, title, ref }: ChartViewProps) {
                 dataKey={model.y.key}
                 position="right"
                 offset={8}
-                className="tabular fill-ink"
+                fill="var(--ink)"
+                className="tabular"
                 formatter={(v: unknown) =>
                   typeof v === 'number' ? formatValue(v, model.y.format) : toText(v)
                 }
@@ -195,5 +196,5 @@ export function ChartView({ model, title, ref }: ChartViewProps) {
 /** Room for the longest category label, within reason. */
 function categoryAxisWidth(model: ChartModel): number {
   const longest = Math.max(0, ...model.data.map((row) => categoryLabel(row[model.x]).length));
-  return Math.min(180, Math.max(64, Math.round(longest * 7.6) + 12));
+  return Math.min(200, Math.max(64, Math.round(longest * 8.4) + 16));
 }

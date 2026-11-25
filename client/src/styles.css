@@ -6,6 +6,12 @@
  * Passbook tokens first, then shadcn's variables mapped onto them.
  */
 
+/*
+ * Light theme only: `dark:` utilities in the shadcn components apply only under a
+ * `.dark` class, which this app never sets, instead of following the OS setting.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Variants the shadcn components use (normally from the `shadcn` package's tailwind.css). */
 @custom-variant data-open {
   &:where([data-state='open']),
@@ -137,7 +143,8 @@
 
   html {
     @apply font-sans;
-    color-scheme: light;
+    /* `only`: light theme only (SPEC §14); also stops browsers' forced dark mode repainting the paper. */
+    color-scheme: only light;
     -webkit-font-smoothing: antialiased;
     scrollbar-color: var(--rule) transparent;
     scrollbar-width: thin;
@@ -176,6 +183,70 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* ---- The printing effect (SPEC §14 Motion) ---- */
+
+/* Each printed line wipes in left to right, 50 ms after the line above. */
+@keyframes print-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.print-line {
+  /* `backwards`: once printed, no clip-path is left behind to cut off tooltips. */
+  animation: print-wipe 200ms var(--ease-out-print) backwards;
+  animation-delay: calc(var(--line, 0) * 50ms);
+}
+
+/* The print head runs along the empty line while the answer is on its way. */
+@keyframes print-head {
+  from {
+    left: 0;
+  }
+  to {
+    left: calc(100% - 3rem);
+  }
+}
+
+.print-head {
+  animation: print-head 900ms cubic-bezier(0.65, 0, 0.35, 1) infinite alternate;
+}
+
+/* The rubber stamp presses on once and stays tilted. */
+@keyframes stamp-press {
+  from {
+    opacity: 0;
+    transform: rotate(-3deg) scale(1.15);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-3deg) scale(1);
+  }
+}
+
+.stamp {
+  transform: rotate(-3deg);
+  animation: stamp-press 180ms var(--ease-out-print) backwards;
+  animation-delay: 60ms;
+}
+
+/* Ruled writing lines on the teller's slip; text sits on the rules. */
+.ruled-field {
+  --rule-gap: 28px;
+  line-height: var(--rule-gap);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--rule-gap) - 1px),
+    var(--rule) calc(var(--rule-gap) - 1px),
+    var(--rule) var(--rule-gap)
+  );
+  background-attachment: local;
 }
 
 /* prefers-reduced-motion: everything appears at once (SPEC §14). */

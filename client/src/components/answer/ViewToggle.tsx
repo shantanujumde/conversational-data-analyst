@@ -11,7 +11,7 @@ interface ViewToggleProps {
 }
 
 const ITEM =
-  'size-8 min-w-8 rounded-none p-0 text-ink-soft hover:bg-cover-wash/60 hover:text-ink data-[state=on]:bg-cover-wash data-[state=on]:text-cover';
+  'size-8 min-w-8 rounded-none p-0 text-ink-soft hover:bg-cover-wash/60 hover:text-ink aria-checked:bg-cover-wash aria-checked:text-cover';
 
 /** Switches a chart answer between the chart and its table. */
 export function ViewToggle({ value, onChange, chartType }: ViewToggleProps) {
