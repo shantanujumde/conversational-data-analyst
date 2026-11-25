@@ -136,9 +136,13 @@ export function ChartView({ model, title, ref }: ChartViewProps) {
                 offset={8}
                 fill="var(--ink)"
                 className="tabular"
-                formatter={(v: unknown) =>
-                  typeof v === 'number' ? formatValue(v, model.y.format) : toText(v)
-                }
+                formatter={(v: unknown) => {
+                  if (typeof v !== 'number') return toText(v);
+                  // Full INR amounts don't fit beside a bar; the tooltip and table keep them.
+                  return model.y.format === 'currency'
+                    ? formatAxis(v, 'currency')
+                    : formatValue(v, model.y.format);
+                }}
               />
             </Bar>
           </BarChart>
