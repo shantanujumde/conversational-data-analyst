@@ -16,6 +16,22 @@ export function formatValue(value: CellValue, format: ValueFormat): string {
   return plain.format(value);
 }
 
+const monthName = new Intl.DateTimeFormat('en-IN', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/** Makes a stored category readable in a sentence: "2025-12" → "December 2025", "RETAIL" → "Retail", "SME" stays. */
+export function displayLabel(value: CellValue): string {
+  const text = String(value);
+  const month = /^(\d{4})-(\d{2})$/.exec(text);
+  if (month) return monthName.format(new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1)));
+  if (/^[A-Z_]{4,}$/.test(text))
+    return text.charAt(0) + text.slice(1).toLowerCase().replaceAll('_', ' ');
+  return text;
+}
+
 /** The row with the largest (or smallest) value for `key`. */
 function extreme(rows: Row[], key: string, want: 'max' | 'min'): Row | undefined {
   let best: Row | undefined;
@@ -48,14 +64,14 @@ export function summarize(validated: ValidatedPlan, answer: ShapedAnswer): strin
       const row = extreme(rows, viz.y, lowest ? 'min' : 'max');
       if (!row) break;
       const value = formatValue(row[viz.y] ?? null, formatOf(viz.y));
-      return `${String(row[viz.x])} has the ${lowest ? 'lowest' : 'highest'} ${labelOf(viz.y).toLowerCase()} at ${value}.`;
+      return `${displayLabel(row[viz.x] ?? null)} has the ${lowest ? 'lowest' : 'highest'} ${labelOf(viz.y).toLowerCase()} at ${value}.`;
     }
     case 'line': {
       const row = extreme(rows, viz.y, 'max');
       if (!row) break;
       const value = formatValue(row[viz.y] ?? null, formatOf(viz.y));
-      const series = viz.series ? ` for ${String(row[viz.series])}` : '';
-      return `${labelOf(viz.y)} peaked in ${String(row[viz.x])}${series} at ${value}.`;
+      const series = viz.series ? ` for ${displayLabel(row[viz.series] ?? null)}` : '';
+      return `${labelOf(viz.y)} peaked in ${displayLabel(row[viz.x] ?? null)}${series} at ${value}.`;
     }
     case 'table':
     case 'text':
