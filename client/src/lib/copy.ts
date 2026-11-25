@@ -83,9 +83,18 @@ function inlineStyles(source: Element, target: Element): void {
   }
 }
 
+export interface PngLegendItem {
+  label: string;
+  /** A resolved colour (not a CSS variable). */
+  color: string;
+  dash?: string;
+}
+
 interface PngOptions {
   /** Printed above the chart so the pasted image explains itself. */
   title?: string;
+  /** Series names, drawn under the title (the on-screen legend is HTML, not part of the SVG). */
+  legend?: readonly PngLegendItem[];
   background: string;
   ink: string;
   scale?: number;
@@ -96,7 +105,8 @@ export async function svgToPng(svg: SVGSVGElement, options: PngOptions): Promise
   const { width, height } = svg.getBoundingClientRect();
   const scale = options.scale ?? 2;
   const pad = 24;
-  const titleHeight = options.title ? 32 : 0;
+  const legend = options.legend ?? [];
+  const titleHeight = (options.title ? 32 : 0) + (legend.length > 0 ? 28 : 0);
 
   const clone = svg.cloneNode(true) as SVGSVGElement;
   inlineStyles(svg, clone);
@@ -125,6 +135,25 @@ export async function svgToPng(svg: SVGSVGElement, options: PngOptions): Promise
       ctx.font = '600 16px "Public Sans", sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillText(options.title, pad, pad);
+    }
+    if (legend.length > 0) {
+      const y = pad + (options.title ? 32 : 0) + 8;
+      let x = pad;
+      ctx.font = '400 13px "Public Sans", sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 2;
+      for (const item of legend) {
+        ctx.strokeStyle = item.color;
+        ctx.setLineDash(item.dash ? item.dash.split(' ').map(Number) : []);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 20, y);
+        ctx.stroke();
+        ctx.fillStyle = options.ink;
+        ctx.fillText(item.label, x + 26, y);
+        x += 26 + ctx.measureText(item.label).width + 20;
+      }
+      ctx.setLineDash([]);
     }
     ctx.drawImage(img, pad, pad + titleHeight, width, height);
 
