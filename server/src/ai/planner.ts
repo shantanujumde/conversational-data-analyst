@@ -1,10 +1,13 @@
 import { type QueryPlan, QueryPlanSchema } from '@cda/shared';
-import { generateText, type LanguageModel, Output } from 'ai';
+import { APICallError, generateText, type LanguageModel, Output } from 'ai';
 import { SUGGESTIONS } from '../catalog/examples';
 import { AppError } from '../errors';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
-export const AI_TIMEOUT_MS = 15_000;
+/** Time allowed for one model call. Free-tier Gemini often needs 15–20 s. */
+export const AI_TIMEOUT_MS = 30_000;
+/** One automatic retry when the provider is busy (timeout, 429, 5xx). */
+export const AI_MAX_ATTEMPTS = 2;
 
 /** Turns a question into a query plan. Tests inject their own. */
 export interface Planner {
@@ -23,14 +26,19 @@ export function unsupportedQuestion(reason: string): AppError {
   );
 }
 
-/** Plans with a real model through the AI SDK: one call, no retries, 15 s timeout. */
+/** True for failures worth one more try: our timeout, or a provider status the SDK marks retryable (429, 5xx). */
+export function isRetryable(err: unknown): boolean {
+  if (err instanceof DOMException) return err.name === 'TimeoutError' || err.name === 'AbortError';
+  return APICallError.isInstance(err) && err.isRetryable;
+}
+
+/** Plans with a real model through the AI SDK: up to 2 attempts, 30 s each. */
 export function createAiPlanner(model: LanguageModel, modelId: string): Planner {
   return {
     provider: 'google',
     model: modelId,
     async plan(question) {
-      let output: unknown;
-      try {
+      const call = async () => {
         const result = await generateText({
           model,
           instructions: buildSystemPrompt(new Date()),
@@ -38,11 +46,20 @@ export function createAiPlanner(model: LanguageModel, modelId: string): Planner 
           output: Output.object({ schema: QueryPlanSchema, name: 'query_plan' }),
           providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } },
           abortSignal: AbortSignal.timeout(AI_TIMEOUT_MS),
-          maxRetries: 0,
+          maxRetries: 0, // retries are handled below, so the timeout covers each attempt
         });
-        output = result.output;
-      } catch (err) {
-        throw new AppError('AI_ERROR', undefined, {}, { cause: err });
+        return result.output as unknown;
+      };
+
+      let output: unknown;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          output = await call();
+          break;
+        } catch (err) {
+          if (attempt < AI_MAX_ATTEMPTS && isRetryable(err)) continue;
+          throw new AppError('AI_ERROR', undefined, {}, { cause: err });
+        }
       }
 
       // The SDK already checked the shape; check again so nothing unparsed reaches the query layer.

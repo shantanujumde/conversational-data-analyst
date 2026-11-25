@@ -30,8 +30,8 @@ function clientError(code: ClientOnlyCode): ApiResult<never> {
   return { ok: false, error: { code, message: errorView[code].fallbackMessage } };
 }
 
-/** A little longer than the server's 15 s AI timeout. */
-const TIMEOUT_MS = 20_000;
+/** Longer than the server's worst case: two 30 s AI attempts (docs/SPEC.md §7). */
+const TIMEOUT_MS = 65_000;
 
 /** The only place that turns a failed request into a result. Never throws. */
 async function request<T extends z.ZodType>(

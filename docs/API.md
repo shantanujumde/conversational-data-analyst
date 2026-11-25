@@ -51,7 +51,7 @@ interface ErrorBody {
 | 413  | `VALIDATION_ERROR`     | Body over 10 KB                                            | none                                           |
 | 422  | `UNSUPPORTED_QUESTION` | AI says the question is out of scope, or plan fails checks | `suggestions`                                  |
 | 429  | `RATE_LIMITED`         | More than 20 asks per minute from one IP                   | `retryAfterSeconds`, plus `Retry-After` header |
-| 502  | `AI_ERROR`             | AI timeout (15 s), provider error, or output fails schema  | none                                           |
+| 502  | `AI_ERROR`             | AI timeout or provider error after 2 tries, or bad output  | none                                           |
 | 500  | `QUERY_ERROR`          | SQLite error                                               | none                                           |
 | 404  | `NOT_FOUND`            | Unknown path                                               | none                                           |
 | 405  | `METHOD_NOT_ALLOWED`   | Known path, wrong method                                   | `Allow` header                                 |

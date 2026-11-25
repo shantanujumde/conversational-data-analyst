@@ -1,4 +1,5 @@
 import type { QueryPlan } from '@cda/shared';
+import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { describe, expect, it } from 'vitest';
 import { createMockPlanner } from '../src/ai/mockPlanner';
@@ -83,6 +84,66 @@ describe('AI planner', () => {
     expect(err).toMatchObject({ code: 'AI_ERROR' });
     expect((err as Error).message).not.toContain('503');
     expect((err as Error).cause).toBe(providerError);
+  });
+});
+
+describe('AI planner retry', () => {
+  const busy = () =>
+    new APICallError({
+      message: 'This model is currently experiencing high demand.',
+      url: 'https://example.test',
+      requestBodyValues: {},
+      statusCode: 503,
+      isRetryable: true,
+    });
+  const ok = modelReturning(JSON.stringify(rejectionPlan));
+
+  function modelFailingFirst(firstError: Error) {
+    let calls = 0;
+    return new MockLanguageModelV4({
+      doGenerate: (options) => {
+        calls += 1;
+        if (calls === 1) return Promise.reject(firstError);
+        return ok.doGenerate(options);
+      },
+    });
+  }
+
+  it('retries once after a busy provider and returns the plan', async () => {
+    const model = modelFailingFirst(busy());
+
+    await expect(createAiPlanner(model, 'test-model').plan('Anything')).resolves.toEqual(
+      rejectionPlan,
+    );
+    expect(model.doGenerateCalls).toHaveLength(2);
+  });
+
+  it('retries once after a timeout', async () => {
+    const model = modelFailingFirst(new DOMException('timed out', 'TimeoutError'));
+
+    await expect(createAiPlanner(model, 'test-model').plan('Anything')).resolves.toEqual(
+      rejectionPlan,
+    );
+  });
+
+  it('gives up with AI_ERROR after two busy answers', async () => {
+    const model = new MockLanguageModelV4({ doGenerate: () => Promise.reject(busy()) });
+
+    await expect(createAiPlanner(model, 'test-model').plan('Anything')).rejects.toMatchObject({
+      code: 'AI_ERROR',
+    });
+    expect(model.doGenerateCalls).toHaveLength(2);
+  });
+
+  it('does not retry an error that is not retryable', async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: () => Promise.reject(new Error('bad request')),
+    });
+
+    await expect(createAiPlanner(model, 'test-model').plan('Anything')).rejects.toMatchObject({
+      code: 'AI_ERROR',
+    });
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 });
 
