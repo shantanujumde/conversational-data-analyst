@@ -8,24 +8,25 @@ The AI never writes SQL. It only picks from a fixed list of datasets and measure
 
 ## Quick start
 
-You need Node 26 (see `.nvmrc`) and a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+You need Node 26 (see `.nvmrc`) and an API key: Gemini from [Google AI Studio](https://aistudio.google.com/) or OpenAI from [platform.openai.com](https://platform.openai.com/).
 
 ```sh
 npm install
-cp .env.example .env     # then set GEMINI_API_KEY in .env
+cp .env.example .env     # then set GEMINI_API_KEY, or AI_PROVIDER=openai and OPENAI_API_KEY
 npm run db:seed          # creates server/data/bank.db
 npm run dev              # API on :3001, app on http://localhost:5173
 ```
 
-| Setting          | Default             | What it does                                                     |
-| ---------------- | ------------------- | ---------------------------------------------------------------- |
-| `GEMINI_API_KEY` | none                | Your Gemini key. Stays on the server.                            |
-| `AI_PROVIDER`    | `google`            | `mock` answers the example questions with no key and no network. |
-| `AI_MODEL`       | `gemini-4-hydrogen` | Any Gemini model id.                                             |
+| Setting          | Default      | What it does                                                                            |
+| ---------------- | ------------ | --------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`    | `google`     | `google` (Gemini), `openai`, or `mock` (example questions only, no key or network).     |
+| `AI_MODEL`       | per provider | Empty means `gemini-4-hydrogen` or `gpt-5.4-mini`. Any model id of that provider works. |
+| `GEMINI_API_KEY` | none         | Needed for `google`. Stays on the server.                                               |
+| `OPENAI_API_KEY` | none         | Needed for `openai`. Stays on the server.                                               |
 
 The other settings (port, database path, allowed origin) are in `.env.example`.
 
-**If questions fail with "AI service" errors**, change the model. During the build, `gemini-4-hydrogen` returned "high demand" (503) on almost every call, and the free tier allows only about 20 requests a day per model. Setting `AI_MODEL=gemini-3.5-flash` worked.
+**If questions fail with "AI service" errors**, change the model or provider. During the build, `gemini-4-hydrogen` returned "high demand" (503) on almost every call, and the free tier allows only about 20 requests a day per model. `AI_MODEL=gemini-3.5-flash` worked until its daily limit. `AI_PROVIDER=openai` with `gpt-5.4-mini` answered every test question in 3–4 s.
 
 Other commands: `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`. CI runs all of them, plus a format check, on every push.
 
@@ -107,7 +108,7 @@ The React app (`client/`) sends the question to the Express server (`server/`). 
 | Safety list           | Hand-written catalog of datasets and measures | The AI picks names; the server owns every piece of SQL.                                                     |
 | Answer text and chart | Templates, no AI                              | The AI can't invent a number.                                                                               |
 | Database              | SQLite with a seed script                     | One file, nothing to install, set up with one command.                                                      |
-| AI                    | Vercel AI SDK with Gemini                     | Change model with one setting. A built-in mock lets tests run with no key.                                  |
+| AI                    | Vercel AI SDK with Gemini or OpenAI           | Change model with one setting. A built-in mock lets tests run with no key.                                  |
 | Checks and types      | Zod schemas in `shared/`                      | One schema gives both the runtime check and the TypeScript type.                                            |
 | Frontend / backend    | React 19 + Vite, Express                      | Little setup, and Express routes are easy to test end to end with `supertest`.                              |
 | Charts and UI parts   | Recharts, shadcn/ui, Tailwind                 | Charts are SVG, which copy-as-PNG needs. UI parts are accessible and easy to restyle.                       |
@@ -174,4 +175,4 @@ Checked against the brief in [docs/problem-statement.md](docs/problem-statement.
 
 Built with **Claude Code**. The lead session wrote the API contract in `shared/` and `docs/API.md`, then two sub-agents built the backend and frontend in parallel against it. The lead session merged their work, tested it end to end in Chrome, fixed what turned up, and wrote this README.
 
-I made every choice in [Tech choices and why](#tech-choices-and-why) myself. All but the AI timeout were written down in [docs/SPEC.md](docs/SPEC.md) (§1 and §14) before the build. During the build I chose the 30 s timeout with one retry, the `GEMINI_API_KEY` name, and the switch to a flash model when Hydrogen was overloaded.
+I made every choice in [Tech choices and why](#tech-choices-and-why) myself. All but the AI timeout were written down in [docs/SPEC.md](docs/SPEC.md) (§1 and §14) before the build. During the build I chose the 30 s timeout with one retry, the `GEMINI_API_KEY` name, the switch to a flash model when Hydrogen was overloaded, and adding OpenAI as a second provider.
